@@ -26,6 +26,8 @@
   #fire:not(:disabled){box-shadow:0 0 22px rgba(150,225,255,.55)}
   #voice{position:fixed;right:14px;top:max(14px,env(safe-area-inset-top));padding:8px 14px;border-radius:999px;
     border:1px solid rgba(190,235,255,.6);background:rgba(10,20,34,.5);color:#dff6ff;font-size:12px;letter-spacing:.1em}
+  #vol{position:fixed;right:14px;top:calc(max(14px,env(safe-area-inset-top)) + 42px);padding:8px 14px;border-radius:999px;
+    border:1px solid rgba(190,235,255,.6);background:rgba(10,20,34,.5);color:#dff6ff;font-size:12px;letter-spacing:.1em}
   #score{position:fixed;left:14px;top:max(18px,env(safe-area-inset-top));font-size:12px;letter-spacing:.1em;
     opacity:.85;text-shadow:0 0 6px #000;pointer-events:none}
 </style>
@@ -37,6 +39,7 @@
 <div id="hud"></div>
 <div id="score" class="ui"></div>
 <button id="voice" class="ui">声で発射：切</button>
+<button id="vol" class="ui">音量：中</button>
 <button id="fire" class="ui" disabled>発射</button>
 <div id="start">
   <button id="go">はじめる</button>
@@ -47,7 +50,8 @@
 'use strict';
 // ---- 調整用の値 ----
 const MAX = 3;              // 魔法陣の枚数
-const CHARGE_SEC = 1.3;     // かざして 1 枚たまるまでの秒数
+const CHARGE_SEC = 0.55;    // かまえて 1 枚たまるまでの秒数
+const HI = 0.5;             // 効果音の高さ（1 で元の高さ。小さいほど低い）
 const SHAKE_G = 13;         // 振りと見なす加速度（m/s²、重力を除く）
 const SHAKE_GAP = 320;      // 振りを続けて数えない時間（ms）
 const READY_SEC = 0.3;      // 発射の合図から、回転が上がりきるまで
@@ -66,7 +70,7 @@ const Z0 = 0.6, Z1 = 40, Y0 = -0.5;     // 弾道（手元の下 → 画面中�
 const TAU = Math.PI * 2;
 
 const cv = document.getElementById('fx'), g = cv.getContext('2d');
-const hud = document.getElementById('hud'), fireBtn = document.getElementById('fire'), voiceBtn = document.getElementById('voice'), scoreEl = document.getElementById('score');
+const hud = document.getElementById('hud'), fireBtn = document.getElementById('fire'), voiceBtn = document.getElementById('voice'), scoreEl = document.getElementById('score'), volBtn = document.getElementById('vol'), camEl = document.getElementById('cam');
 let W = 0, H = 0, F = 0, DPR = 1, FC = 400;
 function resize(){
   DPR = Math.min(window.devicePixelRatio || 1, 2);
@@ -166,7 +170,7 @@ function glow(x, y, r, a, hue, sx, sy, rot){
 }
 
 // ---- 光の粒・衝撃波の帯・閃光 ----
-let parts = [], rings = [], flares = [], shake = 0, flash = 0;
+let parts = [], rings = [], flares = [], shards = [], shake = 0, flash = 0, punch = 0;
 function part(x, y, vx, vy, life, hue, size, drag){ const p = { x, y, vx, vy, life, max: life, hue, size, drag: drag == null ? 2.5 : drag }; parts.push(p); return p; }
 const STAR_HUE = [200, 45, 320, 262, 186];
 function stars(x, y, n, speed, size, lift){        // またたく十字の星
@@ -208,13 +212,33 @@ function drawFx(t, dt){
     glow(p.x, p.y, p.size * (0.35 + 0.65 * a), a, p.hue, 1 + v * 0.011, 1, Math.atan2(p.vy, p.vx));
   }
   parts = parts.filter(p => p.life > 0);
+  for (const q of shards){                        // 破片：回りながら飛び散り、重さで落ちていく
+    q.life -= dt; q.vy += 900 * dt; q.x += q.vx * dt; q.y += q.vy * dt; q.rot += q.vr * dt;
+    const d = Math.exp(-dt * 1.2); q.vx *= d; q.vy *= d;
+    const a = Math.min(1, q.life / q.max * 2.2);
+    g.save(); g.translate(q.x, q.y); g.rotate(q.rot);
+    if (q.arc){ g.strokeStyle = `hsla(${q.hue},100%,85%,${a})`; g.lineWidth = 2.2; g.beginPath(); g.arc(0, q.size, q.size, -Math.PI/2 - q.arc, -Math.PI/2 + q.arc); g.stroke(); }
+    else { const f = 0.35 + 0.65 * Math.abs(Math.cos(q.rot * 1.7));          // 回るたびに面が光る
+      g.fillStyle = `hsla(${q.hue},100%,${70 + 25 * f}%,${a * (0.25 + 0.6 * f)})`; g.strokeStyle = `hsla(${q.hue},100%,92%,${a * 0.9})`; g.lineWidth = 1;
+      g.beginPath(); g.moveTo(-q.size, q.size * q.sk); g.lineTo(q.size * 0.9, q.size * 0.25); g.lineTo(-q.size * 0.15, -q.size * 0.8); g.closePath(); g.fill(); g.stroke(); }
+    g.restore();
+  }
+  shards = shards.filter(q => q.life > 0);
+}
+function shatter(x, y, R, hue){                  // 的が砕ける：三角の破片と、割れた輪のかけら
+  for (let k = 0; k < 34; k++){ const a = Math.random() * TAU, v = 180 + Math.random() * 760, life = 0.7 + Math.random() * 0.8;
+    shards.push({ x: x + Math.cos(a) * R * 0.5, y: y + Math.sin(a) * R * 0.5, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 220, rot: Math.random() * TAU,
+      vr: (Math.random() * 2 - 1) * 16, size: R * (0.14 + Math.random() * 0.3), sk: 0.3 + Math.random() * 0.6, life, max: life, hue: k % 4 ? hue : 200 }); }
+  for (let k = 0; k < 7; k++){ const a = k / 7 * TAU + Math.random() * 0.4, v = 260 + Math.random() * 380, life = 0.8 + Math.random() * 0.5;
+    shards.push({ x: x + Math.cos(a) * R, y: y + Math.sin(a) * R, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 160, rot: a + Math.PI / 2,
+      vr: (Math.random() * 2 - 1) * 9, size: R, arc: 0.32, life, max: life, hue }); }
 }
 
 // ---- 広がっていく魔法陣の残像と、放射する光の筋 ----
 let echoes = [], rays = [], echoN = 0;
 function echoRing(i, z, R0, R1, dur, w, delay){ echoes.push({ i, z, R0, R1, dur, w, born: now() + (delay || 0),
   c: { z, R: R0, ang: [Math.random() * TAU, Math.random() * TAU, Math.random() * TAU] } }); }
-function lightRays(z, len, n, dur, hue, spin){ rays.push({ z, len, n, dur, hue, spin, seed: Math.random() * 99, born: now() }); }
+function lightRays(z, len, n, dur, hue, spin, at){ rays.push({ z, len, n, dur, hue, spin, at, seed: Math.random() * 99, born: now() }); }
 function drawMagic(t, dt){
   for (const e of echoes){
     const u = (t - e.born) / e.dur; if (u < 0 || u >= 1) continue;
@@ -225,7 +249,7 @@ function drawMagic(t, dt){
   echoes = echoes.filter(e => t - e.born < e.dur);
   for (const r of rays){
     const u = Math.max(0, (t - r.born) / r.dur); if (u >= 1) continue;
-    const [x, y] = proj(r.z), a = Math.pow(1 - u, 1.6) * Math.min(1, 0.2 + u * 14), L = r.len * (0.45 + 0.75 * (1 - Math.pow(1 - u, 3)));
+    const [x, y] = r.at || proj(r.z), a = Math.pow(1 - u, 1.6) * Math.min(1, 0.2 + u * 14), L = r.len * (0.45 + 0.75 * (1 - Math.pow(1 - u, 3)));
     const gr = g.createRadialGradient(x, y, 0, x, y, L);
     gr.addColorStop(0, `rgba(255,255,255,${a * 0.32})`); gr.addColorStop(0.3, `hsla(${r.hue},100%,80%,${a * 0.2})`); gr.addColorStop(1, `hsla(${r.hue},100%,70%,0)`);
     g.fillStyle = gr; g.beginPath();
@@ -244,12 +268,17 @@ function drawMagic(t, dt){
 // 材料は、純音（サイン波）、ごく短いクリック、白色雑音の切れ端、低い純音のパルスだけ。
 // 音の出入りは、ふくらませずに、定規で切ったように入って切れる（gate）。
 // 残響は控えめ。発射の直前に一瞬だけ無音にするのは残している。
-let ac = null, bus, sat, rev, echo, nbuf, drone = null, curve, stair, swing = 0, tickT = 0;
+let ac = null, bus, sat, rev, echo, nbuf, drone = null, curve, stair, swing = 0, tickT = 0, volG = null;
+const VOLS = [['大', 1], ['中', 0.55], ['小', 0.25], ['切', 0]];
+let volI = +(localStorage.getItem('arbeem-vol') || 1) % 4;
+function setVol(){ if (volG) volG.gain.value = VOLS[volI][1]; volBtn.textContent = '音量：' + VOLS[volI][0]; }
 const rv = () => 1 + (Math.random() - 0.5) * 0.07;      // 毎回少しだけ音程をずらす
 function initAudio(){
   try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return; }
   const sr = ac.sampleRate, comp = ac.createDynamicsCompressor();
-  comp.threshold.value = -12; comp.ratio.value = 5; comp.attack.value = 0.002; comp.release.value = 0.18; comp.connect(ac.destination);
+  comp.threshold.value = -12; comp.ratio.value = 5; comp.attack.value = 0.002; comp.release.value = 0.18;
+  const shelf = ac.createBiquadFilter(); shelf.type = 'highshelf'; shelf.frequency.value = 3000; shelf.gain.value = -10;   // 高い帯を全体に抑える
+  volG = ac.createGain(); setVol(); comp.connect(shelf).connect(volG).connect(ac.destination);
   curve = new Float32Array(2048); for (let i = 0; i < 2048; i++) curve[i] = Math.tanh((i / 1024 - 1) * 3);
   const soft = new Float32Array(2048); for (let i = 0; i < 2048; i++) soft[i] = Math.tanh((i / 1024 - 1) * 1.6) / Math.tanh(1.6);
   stair = new Float32Array(2048); for (let i = 0; i < 2048; i++) stair[i] = Math.round((i / 1024 - 1) * 3) / 3;   // 段々に荒らす
@@ -325,9 +354,9 @@ function noise(dur, type, f0, f1, q, vol, o){
   fin(n, t, dur, vol, o); s.start(t, Math.random()); s.stop(t + dur + 0.05);
 }
 const G = o => Object.assign({ gate: true }, o);
-const tick = (f, vol, at, pan) => noise(0.004, 'highpass', f, f, 0.7, vol, { at, pan, gate: true });       // 針の先のようなクリック
-const tone = (f, dur, vol, o) => osc('sine', f, f, dur, vol, G(o));                                         // 切り口のまっすぐな純音
-const slice = (dur, f, vol, o) => noise(dur, 'bandpass', f, f, 8, vol, Object.assign({ gate: true, crush: true }, o));   // 雑音の切れ端
+const tick = (f, vol, at, pan) => noise(0.005, 'bandpass', f * HI * 0.8, f * HI * 0.8, 1.1, vol * 0.8, { at, pan, gate: true });       // 針の先のようなクリック
+const tone = (f, dur, vol, o) => osc('sine', f * HI, f * HI, dur, vol, G(o));                                         // 切り口のまっすぐな純音
+const slice = (dur, f, vol, o) => noise(dur, 'bandpass', f * HI, f * HI, 8, vol, Object.assign({ gate: true, crush: true }, o));   // 雑音の切れ端
 const STEP = [1, 1.5, 2.25];                                     // 1 枚ごとに上がる高さ（音階ではなく、一定の比）
 
 function sndLoad(i){            // クリック → 読み込みのような 4 連の短い純音 → 確定の 1 音と低いパルス
@@ -339,7 +368,7 @@ function sndLoad(i){            // クリック → 読み込みのような 4 �
 }
 function sndRiser(dur){         // 上がっていく純音と、間隔が詰まっていくクリック → 直前に一瞬の無音
   if (!ac) return; const d = dur - 0.075, T = ac.currentTime;
-  osc('sine', 180, 2880, d, 0.09, { atk: d * 0.9 }); osc('sine', 7000, 11000, d, 0.03, { atk: d * 0.9 });
+  osc('sine', 140, 1500, d, 0.1, { atk: d * 0.9 });
   for (let t = 0, iv = 0.11, j = 0; t < d; t += iv, iv = Math.max(0.012, iv * 0.9), j++) tick(7000, 0.08 + 0.2 * t / d, t, j % 2 ? 0.6 : -0.6);
   bus.gain.setValueAtTime(1, T + d - 0.02); bus.gain.linearRampToValueAtTime(0.02, T + d + 0.005);
   bus.gain.setValueAtTime(0.02, T + dur - 0.004); bus.gain.linearRampToValueAtTime(1, T + dur);
@@ -348,16 +377,16 @@ function sndIgnite(i){          // 固定の比で上がる、硬い純音の一
   const k = STEP[i], pan = [-0.4, 0, 0.4][i];
   tick(5000, 0.5, 0, pan); tone(1320 * k, 0.07, 0.22, { pan, wet: 0.25 }); tone(1320 * k * 2.76, 0.035, 0.1, { pan });
   osc('sine', 70, 50, 0.1, 0.4, G({}));
-  noise(0.09, 'bandpass', 2400, 2400, 1, 0.22, { comb: [300, 0.85], gate: true, pan, wet: 0.2 });           // 冷たい金属の筒の鳴り
+  noise(0.09, 'bandpass', 1300, 1300, 1, 0.22, { comb: [220, 0.85], gate: true, pan, wet: 0.2 });           // 冷たい金属の筒の鳴り
 }
 function sndFire(){
   tick(3000, 1.0, 0, 0); noise(0.07, 'highpass', 400, 400, 0.5, 0.8, { gate: true });      // 一瞬の白色雑音の壁
   osc('sine', 82, 29, 1.5, 1.0, { atk: 0.008 });                                            // 沈んでいく低い純音
-  osc('sine', 9000, 380, 0.4, 0.2, { wet: 0.35 });                                          // まっすぐ落ちる純音
+  osc('sine', 3800, 240, 0.4, 0.2, { wet: 0.35 });                                          // まっすぐ落ちる純音
   tone(3520, FLY_SEC - 0.02, 0.07, { at: 0.02, pan: -0.5, wet: 0.25 });                     // 飛んでいる間だけ鳴る、うなりのある 2 本の純音
   tone(3531, FLY_SEC - 0.02, 0.07, { at: 0.02, pan: 0.5, wet: 0.25 });                      // （着弾でぷつりと切れる）
-  fm(1100, 1100, 1.414, 6, 0.2, 0.18, 0.2, { wet: 0.3 });                                   // 濁った冷たい金属音
-  noise(1.1, 'highpass', 1500, 9000, 0.7, 0.28, { wet: 0.45 });                             // 上へ抜けていく空気
+  fm(620, 620, 1.414, 6, 0.2, 0.2, 0.22, { wet: 0.3 });                                   // 濁った冷たい金属音
+  noise(1.1, 'bandpass', 700, 3800, 0.8, 0.3, { wet: 0.45 });                             // 上へ抜けていく空気
   for (let k = 0; k < 7; k++) slice(0.018, 800 + Math.random() * 7000, 0.28, { at: 0.09 + k * 0.034, pan: Math.random() * 1.6 - 0.8 });   // 信号が乱れるような切れ端
 }
 function sndPass(i){            // 陣を抜ける：一定の比で上がる、短い純音
@@ -367,12 +396,14 @@ function sndPass(i){            // 陣を抜ける：一定の比で上がる、
 function sndImpact(){           // 着弾：低い純音の一打と、長く残る 1 本の純音
   tick(4000, 0.6, 0, 0); osc('sine', 58, 27, 1.1, 0.9, { atk: 0.005, wet: 0.3 });
   noise(0.5, 'lowpass', 900, 80, 0.7, 0.45, { wet: 0.6 });
-  osc('sine', 1480, 1480, 1.8, 0.08, { wet: 0.9, pan: -0.5 }); osc('sine', 1487, 1487, 1.8, 0.08, { wet: 0.9, pan: 0.5 });
+  osc('sine', 660, 660, 1.8, 0.09, { wet: 0.9, pan: -0.5 }); osc('sine', 665, 665, 1.8, 0.09, { wet: 0.9, pan: 0.5 });
   for (let k = 0; k < 8; k++) tick(9000, 0.25, Math.random() * 0.35, Math.random() * 1.6 - 0.8);
 }
-function sndHit(){              // 命中：確定を知らせる、上がる 2 音
-  tone(2640, 0.05, 0.25, { wet: 0.3 }); tone(3960, 0.09, 0.25, { at: 0.06, wet: 0.4 });
-  slice(0.03, 6000, 0.25, {}); osc('sine', 120, 60, 0.15, 0.5, G({ at: 0.02 }));
+function sndHit(){              // 命中：砕ける手ごたえ（低い一打＋ざらついた破裂）→ 確定の 2 音 → 破片がぱらつく
+  osc('sine', 95, 38, 0.3, 0.9, { atk: 0.004 });
+  noise(0.14, 'bandpass', 900, 500, 1, 0.7, { crush: true, wet: 0.3 }); noise(0.05, 'lowpass', 2500, 2500, 0.7, 0.6, { gate: true });
+  tone(2640, 0.05, 0.22, { at: 0.07, wet: 0.3 }); tone(3960, 0.1, 0.22, { at: 0.13, wet: 0.4 });
+  for (let k = 0; k < 12; k++) tick(2500 + Math.random() * 3500, 0.12 + Math.random() * 0.15, 0.08 + Math.random() * 0.5, Math.random() * 1.6 - 0.8);
 }
 function sndMiss(){ tone(196, 0.12, 0.16, { at: 0.05 }); }      // はずれ：低い 1 音
 function updateDrone(spinUp){
@@ -381,7 +412,7 @@ function updateDrone(spinUp){
   // 待機中：低い純音 2 本（わずかにずらして、ゆっくりうなる）と、高く細い純音 1 本
   const f = 55 * (1 + 0.25 * n) * (1 + 1.2 * spinUp) * (1 + 0.15 * swing);
   drone.o1.frequency.setTargetAtTime(f * 2, T, 0.08); drone.o2.frequency.setTargetAtTime(f * 2, T, 0.08);
-  drone.o3.frequency.setTargetAtTime(4200 + 1100 * n + 3500 * spinUp + 800 * swing, T, 0.08);
+  drone.o3.frequency.setTargetAtTime(1300 + 320 * n + 1100 * spinUp + 250 * swing, T, 0.08);
   drone.v.gain.setTargetAtTime(on ? 0.07 + 0.025 * n + 0.07 * spinUp + 0.04 * swing : 0, T, on ? 0.1 : 0.02);
   // かざしてためている間：たまるほど間隔が詰まるクリック
   if (phase === 'load' && steady && charge > 0.02 && circles.length < MAX){
@@ -536,9 +567,11 @@ function lockedTargets(n){ return n ? targets.filter(q => !q.dead && aimAngle(q.
 function judge(t){               // 着弾の瞬間に、照準の輪の中にいる的すべてに当たる
   shots++; const got = lockedTargets(shotN);
   if (!got.length){ sndMiss(); popups.push({ x: W/2, y: H/2 - 46, text: 'はずれ', born: t, hue: 200 }); return; }
-  hits++; sndHit(); navigator.vibrate && navigator.vibrate([30, 30, 60]); nextSpawn = t + 0.9;
+  hits++; sndHit(); navigator.vibrate && navigator.vibrate([50, 20, 160]); nextSpawn = t + 0.9;
+  punch = 1; shake += 38; flash = 1;                 // 画面ごと、どんと揺らす
   for (const q of got){ q.dead = t; kills++; const p = toScreen(q.d), R = FC * q.size;
-    stars(p.sx, p.sy, 26, 480, 17, 80);
+    stars(p.sx, p.sy, 30, 620, 19, -260); shatter(p.sx, p.sy, R, q.hue);
+    lightRays(0, R * 7, 16, 0.6, q.hue, 0.6, [p.sx, p.sy]); lightRays(0, R * 4, 10, 0.4, 200, -0.9, [p.sx, p.sy]);
     for (let k = 0; k < 36; k++){ const a = Math.random() * TAU, v = 150 + Math.random() * 500;
       part(p.sx + Math.cos(a) * R, p.sy + Math.sin(a) * R, Math.cos(a) * v, Math.sin(a) * v, 0.4 + Math.random() * 0.5, q.hue, 6 + Math.random() * 8, 3); }
     popups.push({ x: p.sx, y: p.sy - R - 14, text: '命中', born: t, hue: q.hue }); }
@@ -552,6 +585,9 @@ function drawTargets(t){
       glow(p.sx, p.sy, R * (2 + 5 * u), a, hue); glow(p.sx, p.sy, R * 1.2, a, hue, 7 * (1 + u), 0.5);
       g.strokeStyle = `hsla(${hue},100%,85%,${a})`; g.lineWidth = 7 * (1 - u) + 1;
       g.beginPath(); g.arc(p.sx, p.sy, R * (1 + 4 * (1 - Math.pow(1 - u, 3))), 0, TAU); g.stroke();
+      g.strokeStyle = `rgba(255,255,255,${a * 0.8})`; g.lineWidth = 12 * (1 - u) + 1;
+      g.beginPath(); g.arc(p.sx, p.sy, R * (1 + 8 * (1 - Math.pow(1 - u, 4))), 0, TAU); g.stroke();
+      glow(p.sx, p.sy, R * 0.9, a, hue, 0.4, 9 * (1 + u));
       continue;
     }
     const onScreen = p.z > 0 && p.sx > -R && p.sx < W + R && p.sy > -R && p.sy < H + R;
@@ -577,7 +613,7 @@ function drawTargets(t){
         g.moveTo(p.sx + sx * b, p.sy + sy * (b - c)); g.lineTo(p.sx + sx * b, p.sy + sy * b); g.lineTo(p.sx + sx * (b - c), p.sy + sy * b); g.stroke(); }
     }
   }
-  g.font = '600 15px system-ui,sans-serif'; g.textAlign = 'center';
+  g.font = '700 22px system-ui,sans-serif'; g.textAlign = 'center';
   for (const q of popups){ const u = (t - q.born) / 0.9;
     g.fillStyle = `hsla(${q.hue},100%,88%,${Math.max(0, 1 - u)})`; g.fillText(q.text, q.x, q.y - u * 26); }
   popups = popups.filter(q => t - q.born < 0.9);
@@ -611,7 +647,7 @@ function listenVoice(t){
   if (rms > th) micHot++; else { micHot = 0; micFloor += (rms - micFloor) * 0.03; }
   const lv = Math.min(100, rms / th * 100 | 0);       // ボタンの地色で、いまの声の大きさを見せる（右端まで届くと発射）
   voiceBtn.style.background = `linear-gradient(90deg, rgba(150,225,255,.45) ${lv}%, rgba(10,20,34,.5) ${lv}%)`;
-  if (micHot >= 3 && t - lastOwn > 0.45){ micHot = 0; trigger(); }   // 自分の装填音を拾った直後は無視する
+  if (micHot >= 3 && t - lastOwn > 0.3){ micHot = 0; trigger(); }   // 自分の装填音を拾った直後は無視する
 }
 
 // ---- 毎フレーム ----
@@ -619,8 +655,10 @@ let last = now(), lastRing = 0;
 function frame(){
   const t = now(), dt = Math.min(0.05, t - last); last = t;
   const decay = Math.exp(-dt * 3.2); ox *= decay; oy *= decay;
-  shake *= Math.exp(-dt * 7); flash *= Math.exp(-dt * 6);
+  shake *= Math.exp(-dt * 7); flash *= Math.exp(-dt * 6); punch *= Math.exp(-dt * 9);
   g.setTransform(DPR, 0, 0, DPR, 0, 0); g.clearRect(0, 0, W, H);
+  { const k = 1 + punch * 0.07; g.translate(W/2, H/2); g.scale(k, k); g.translate(-W/2, -H/2);        // 命中の瞬間、映像ごと一瞬ふくらむ
+    if (camEl.isConnected) camEl.style.transform = punch > 0.01 ? `scale(${1 + punch * 0.05})` : ''; }
   g.translate((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake);
   g.globalCompositeOperation = 'lighter';
 
@@ -743,6 +781,7 @@ document.getElementById('go').addEventListener('click', async () => {
   phase = 'load'; document.body.classList.add('on');
   fireBtn.addEventListener('pointerdown', e => { e.preventDefault(); trigger(); });
   voiceBtn.addEventListener('click', toggleVoice);
+  volBtn.addEventListener('click', () => { volI = (volI + 1) % 4; localStorage.setItem('arbeem-vol', volI); setVol(); });
   addEventListener('keydown', e => { if (e.code === 'Space') trigger(); if (e.code === 'KeyL') load(); });
   addEventListener('pointermove', e => { if (hasOri) return;
     lookAz = (e.clientX / W - 0.5) * 2.2; lookEl = -(e.clientY / H - 0.5) * 1.2; lookBasis(); });
