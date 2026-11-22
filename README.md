@@ -8,8 +8,3 @@
 - 公開先：https://tsaitowowbio-bot.github.io/ARbeem/
 
 見た目・音の調整用の値は、`index.html` の冒頭「調整用の値」にまとめてある。
-
-## 調査メモ
-
-- [`docs/charge-fire-research.md`](docs/charge-fire-research.md)：魔法陣で充填して撃つ演出を、既存の作品と比べた。いまの実装への改善案つき。
-- [`docs/chant-gacha-research.md`](docs/chant-gacha-research.md)：詠唱から LLM でガチャ的に魔法が出る機能の作り方。設計の案と、進め方つき。
