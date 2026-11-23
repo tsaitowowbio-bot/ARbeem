@@ -24,7 +24,8 @@
 //    ・かなだけの短いことば（とり・たま・かぜ など）は、前後が区切りのときだけ当てる（ひとり・たまご・とりあえず を避ける）。
 //      区切り＝文の端、記号のあった所、助詞（の・よ・を…）、表にあることば、ひらがなとカタカナの変わり目、
 //      漢字のあとの送りがな（白い・燃える・聖なる など）。
-//      カタカナの 3 字のことばは、となりが 3 字以上のカタカナのかたまりでもよい（アイスブレス は当て、ハーバード は当てない）。
+//      カタカナの入力では、長いことばも同じように確かめる。となりが 3 字以上の知らないカタカナのかたまりならよい
+//      （アイスブレス・スーパードラゴン は当て、ハーバード・サファイア は当てない）。
 // 3) 重みを直す：
 //    ・「〜のように」「〜のごとく」と続くことばは、たとえなので 0.3 倍（蛇のように → 姿ではなく、動き「蛇行」の手がかりにする）。
 //    ・「〜を」と続くことばは、相手や道具のことが多いので 0.6 倍（闇を切り裂く光 → 光）。
@@ -66,19 +67,22 @@ const chTable = new Map();
 let chMaxLen = 1;
 const CH_FOREIGN = { key: '', len: 0, c: [] }, CH_TAIL = { key: '', len: 0, c: [] };   // 目印（知らないカタカナのかたまり／送りがな）
 function chAdd(raw, slot, value, cost){
-  const m = /^(.+?)([~<>!_?^]*)(?::(\d))?$/.exec(raw); if (!m) return;
+  const m = /^(.+?)([~<>!_?^=]*)(?::(\d))?$/.exec(raw); if (!m) return;
   const key = chFoldStr(m[1].normalize('NFKC')), fl = m[2], w = m[3] ? +m[3] / 10 : 1;
   let e = chTable.get(key);
   if (!e){
-    e = { key, len: key.length, cost, c: [], isoL: false, isoR: false, anch: false, kata: false, fixed: false };
+    e = { key, len: key.length, cost, c: [], isoL: false, isoR: false, anch: false, kata: false, fixed: false, kana: /^[\u3041-\u3096\u30fc]+$/.test(key) };
     chTable.set(key, e); if (key.length > chMaxLen) chMaxLen = key.length;
   }
   if (cost < e.cost) e.cost = cost;
+  // カタカナで書いたことばは、入力もカタカナのときだけ当てる（「美しくない」のクナイ、「〜でいるかも」のイルカを避ける）
+  if (/^[\u30a1-\u30fa\u30fc]+$/.test(m[1])){ if (!e.hira) e.kata = true; } else { e.hira = true; e.kata = false; }
   if (!slot) return;
   e.c.push({ slot, value, w, hint: fl.includes('?') });
   if (fl.includes('~') || fl.includes('<')) e.isoL = true;
   if (fl.includes('~') || fl.includes('>')) e.isoR = true;
-  if (fl.includes('^')) e.kata = true;
+  if (fl.includes('^') && !e.hira) e.kata = true;
+  if (fl.includes('=')) e.strict = true;
   // かな（か英字）だけの短いことばは、前後を確かめる
   if (fl.includes('!')){ e.anch = false; e.fixed = true; }
   else if (fl.includes('_')){ e.anch = true; e.fixed = true; }
@@ -91,14 +95,15 @@ function chAdd(raw, slot, value, cost){
     for (const raw of words(list)) chAdd(raw, slot, slot === 'speed' ? (value === 'fast' ? 1 : -1) : value, 1);
   for (const raw of words(LEXICON.neutral)) chAdd(raw, null, null, 1);
   for (const raw of words(LEXICON.known)) chAdd(raw, null, null, 1);
-  for (const raw of words(LEXICON.glue)) chAdd(raw, null, null, 2);
-  for (const raw of CH_SIMILE) chAdd(raw, null, null, 2);
+  // つなぎのことば（助詞など）は、入力がカタカナのときは当てない（「ガリバー」の ガ を助詞にしない）
+  for (const raw of words(LEXICON.glue).concat(CH_SIMILE)){ chAdd(raw, null, null, 2); const e = chTable.get(chFoldStr(raw)); if (e && !e.c.length) e.nokata = true; }
 })();
 
 // ---- 区切る：いちばん「知らない字が少ない」分け方を探す ----
 // 状態：0＝直前は知らない字、1＝直前は知らないカタカナのかたまり、2＝直前は知っていることば、
 //       3＝直前のことばが「次はかたまりか、知っていることば」を求めている、4＝「次は知っていることば」を求めている
 function chSegment(key, cls, brk, n){
+  const allKata = cls.every(k => k === 2);
   const S = 5, INF = 1e9, N = (n + 1) * S;
   const cost = new Float64Array(N).fill(INF), bi = new Int32Array(N), bs = new Int8Array(N), be = new Array(N).fill(null);
   cost[2] = 0;
@@ -114,30 +119,37 @@ function chSegment(key, cls, brk, n){
       // 知らないカタカナのかたまり（3 字以上）
       if (mc === 2 && s !== 4) for (let j = i + 3; j <= run[i]; j++) relax(j, 1, c + 10 * (j - i) - 0.5, i, s, CH_FOREIGN);
       // 漢字のあとの送りがな（1〜3 字）
-      if (mc === 1 && pc === 3) for (let j = i + 1; j <= i + 3 && j <= run[i]; j++) if (CH_TAIL_END.includes(key[j - 1])) relax(j, 2, c + 3, i, s, CH_TAIL);
+      if (mc === 1 && pc === 3) for (let j = i + 1; j <= i + 3 && j <= run[i]; j++) if (CH_TAIL_END.includes(key[j - 1])) relax(j, 2, c + 10 * (j - i) - 0.5, i, s, CH_TAIL);
       // 表のことば
       for (let L = 1; L <= chMaxLen && i + L <= n; L++){
         if (L > 1 && brk[i + L - 1]) break;
         const e = chTable.get(key.substr(i, L)); if (!e) continue;
         const j = i + L;
         if (e.kata){ let all = true; for (let q = i; q < j; q++) if (cls[q] !== 2) all = false; if (!all) continue; }
+        if (e.nokata && mc === 2 && !(allKata && e.key === 'の')) continue;      // 全部カタカナの文（ホノオノリュウ）では「ノ」だけ助詞とみなす
+        // カタカナの入力では、かなのことばは長くても前後を確かめる（サファイア の ファイア、フリーランス の ランス を避ける）
+        const hard = L <= 2 || e.strict;               // 短いことばと「=」のことばは、となりが本当に知っていることばでないといけない
         if (!edge){                                    // 左どなり
-          if (e.anch){
-            if (mc === 2){ if (pc === 2 && s < (L <= 2 ? 2 : 1)) continue; }
-            else if (mc === 1){ if ((pc === 1 || pc === 3) && s < 2) continue; }
+          if (mc === 2 && e.kana){ if (pc === 2 && s < (hard ? 2 : 1)) continue; }
+          else if (e.anch){
+            if (mc === 1){ if ((pc === 1 || pc === 3) && s < 2) continue; }
             else if (pc === mc && s < 2) continue;
           } else if (e.isoL && pc === 3 && s === 0) continue;
         }
         let s2 = 2;                                    // 右どなり
         if (j < n && !brk[j]){
           const lc = cls[j - 1], nc = cls[j];
-          if (e.anch){
-            if (lc === 2){ if (nc === 2) s2 = L <= 2 ? 4 : 3; }
-            else if (lc === 1){ if (nc === 1 || nc === 3) s2 = 4; }
+          if (lc === 2 && e.kana){ if (nc === 2 && !(key[j] === 'ー' && !e.anch && L >= 4)) s2 = hard ? 4 : 3; }
+          else if (e.anch){
+            if (lc === 1){ if (nc === 1 || nc === 3) s2 = 4; }
             else if (nc === lc) s2 = 4;
           } else if (e.isoR && nc === 3) s2 = 4;
         }
         relax(j, s2, c + e.cost, i, s, e);
+        // 長いカタカナ語は、うしろに長音が付いていても同じことばとみなす（ファイヤー・ドラゴーン）
+        if (e.kana && !e.anch && L >= 4 && j < n && !brk[j] && key[j] === 'ー' && key[j - 1] !== 'ー'){
+          relax(j + 1, 2, c + e.cost + 0.1, i, s, e);
+        }
       }
     }
   }
