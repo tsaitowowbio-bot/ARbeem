@@ -92,7 +92,7 @@ const backdropFx = (() => {
   let wDim = 0, wIris = 0, wLight = 0, wHue = -1, wX = -1, wY = -1, wScale = 0, wFx = 0;
 
   // 合図から発射までの長さ（main.js の stepReady と同じ式）。発射の直前に時計が止まっても、そのあいだは暗いまま待つ
-  const readyDur = () => READY_SEC + IGNITE_GAP * shotN + 0.08;
+  const readyDur = () => fireAt || 0.5;      // 発射の合図から、発射の直前に絵が止まるまでの秒数（main.js が決める）
   const loadDim = k => C.dimLoad * Math.pow(clamp(k), 0.8);                        // k：装填の進み（0〜1）
   const peakDim = k => loadDim(k) + (C.dimReady - C.dimLoad) * (0.4 + 0.6 * k);    // 発射直前の暗さ（枚数が少ないと浅い）
   // 光の色：装填ずみの陣の色をまぜる（いちばん新しい陣を 2 倍に数える）。1 枚＝水色、2 枚＝青、3 枚＝青紫
@@ -131,7 +131,7 @@ const backdropFx = (() => {
       [lx, ly] = proj(DEPTH[0]); lt = lightFrom + (Math.max(C.lightReady * (0.5 + 0.5 * kShot), lightFrom) - lightFrom) * (calm ? u : u * u);
       lr = m * (0.55 + 0.27 * kShot) * (1 - 0.12 * u * u); lh = loadHue(shotN); tau = 0.03;
     } else if (phase === 'fire'){         // 弾についていく
-      const u = clamp(phaseT / FLY_SEC);
+      const u = clamp(phaseT / FLY[Math.max(1, shotN) - 1]);
       [lx, ly] = proj(bulletZ); lt = C.lightFire * (0.5 + 0.5 * kShot); lr = m * (0.95 - 0.35 * u); lh = C.hueFire; tau = 0.05;
     } else if (phase === 'cool'){         // 当たった先で、広がりながら消える
       const u = clamp(phaseT / (C.coolHold + C.coolSec));

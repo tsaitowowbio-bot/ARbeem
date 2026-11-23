@@ -118,8 +118,8 @@ function stepCool(t, dt){                         // 余韻：ビームは手前
 let lastReal = performance.now() / 1000, lastCamZoom = '';
 function frame(){
   // 時計を進める。rdt は実際に過ぎた秒数、dt は演出の秒数（hold の間は 0）
-  const real = performance.now() / 1000; let rdt = Math.min(0.05, real - lastReal); lastReal = real;
-  if (self.__step != null){ rdt = self.__step; self.__step = 0; }       // 自動テスト用：時計を手で進める
+  const real = performance.now() / 1000; let rdt = Math.min(0.05, real - lastReal), wall = Math.min(0.25, real - lastReal); lastReal = real;
+  if (self.__step != null){ rdt = wall = self.__step; self.__step = 0; }       // 自動テスト用：時計を手で進める
   let dt = rdt; if (holdLeft > 0){ holdLeft -= rdt; dt = 0; }
   clock += dt; const t = clock;
 
@@ -143,7 +143,7 @@ function frame(){
   const spinUp = phase === 'ready' ? Math.pow(Math.min(1, (t - tPhase) / READY_SEC), 2) : 0;
   spinCircles(t, dt, spinUp);
   updateDrone(spinUp);
-  updateBackdrop(t, rdt);
+  updateBackdrop(t, wall);       // カメラ映像の側は実時間で進める（コマが遅くても、命中の一瞬がのびないように）
 
   drawCharging(t, dt);
   drawCircles(t, spinUp);

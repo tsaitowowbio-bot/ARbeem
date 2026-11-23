@@ -45,7 +45,7 @@ function judge(t){               // 着弾：発射の瞬間に照準の輪に�
   shots++; const n = shotN, k = n - 1, got = shotTargets.filter(q => !q.dead);
   if (!got.length){ sndMiss(); const [x, y] = proj(Z1); popups.push({ x, y: y - 40, text: 'はずれ', born: t, hue: 200 }); return got; }
   hits++; sndHit(); navigator.vibrate && navigator.vibrate([[30, 10, 60], [40, 15, 110], [50, 20, 160]][k]); nextSpawn = t + 0.9;
-  punch = [0.5, 0.75, 1][k]; shake += [20, 30, 38][k]; flash = [0.45, 0.7, 1][k];      // 画面ごと、どんと揺らす
+  punch = [0.5, 0.75, 1][k]; shake += [20, 30, 38][k]; flash = [0.45, 0.6, 0.35][k];   // 画面ごと、どんと揺らす（3 枚は、映像が白黒になる一瞬を見せるため、閃光は弱く）
   hold(HIT_STOP[k]);                                   // 当たった瞬間、絵を一瞬止める
   backdropEvent('hit', n);
   const amt = [0.5, 0.75, 1][k];
