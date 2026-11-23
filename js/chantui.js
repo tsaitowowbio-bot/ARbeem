@@ -9,12 +9,15 @@ function doChant(text){
   if (phase !== 'load'){ chantSay('いまは唱えられません（撃ち終わるまで待ってください）'); return; }
   if (!circles.length){ chantSay('まだ装填されていません'); return; }
   const r = interpretChant(text);
-  if (!r.ok){ fizzle(); chantSay('不発：属性か、姿のことばが見つかりません'); return; }
+  if (!r.ok){ fizzle();
+    chantSay(r.motion || r.speed ? '不発：動きのことばだけでは出ません。属性か、姿のことばを入れてください' : '不発：属性か、姿のことばが見つかりません'); return; }
   if (!castSpell(r)) return;
-  // 見つかったことばはそのまま、見つからなかった項目は「おまかせ」、まだ描けない姿は玉にしたことを伝える
-  const s = spell.spec, formTxt = !r.form ? FORM_JA[s.form] + '（おまかせ）' : r.form === s.form ? FORM_JA[s.form] : `${FORM_JA[r.form]}→玉（この姿は、まだ描けません）`;
-  const parts = [ELEMENT_JA[s.element] + (r.element ? '' : '（おまかせ）'), formTxt, MOTION_JA[s.motion] + (r.motion ? '' : '（おまかせ）')];
-  chantSay(`${parts.join('・')}　${RARITY_JA[spell.rarity]}`);
+  // どのことばが効いたかを見せる。見つからなかった項目は「おまかせ」、まだ描けない姿は玉にしたことを伝える
+  const s = spell.spec, used = slot => r.hits.filter(h => h.slot === slot && h.used).sort((a, b) => b.w - a.w)[0];
+  const show = (slot, ja, found) => { const h = used(slot); return found && h ? `${h.word}→${ja}` : `${ja}（おまかせ）`; };
+  const formTxt = r.form && r.form !== s.form ? `${(used('form') || {}).word || FORM_JA[r.form]}→${FORM_JA[r.form]}→玉（この姿は、まだ描けません）` : show('form', FORM_JA[s.form], r.form);
+  const sp = r.speed > 0 ? '・速い' : r.speed < 0 ? '・ゆっくり' : '';
+  chantSay(`${show('element', ELEMENT_JA[s.element], r.element)}・${formTxt}・${show('motion', MOTION_JA[s.motion], r.motion)}${sp}　${RARITY_JA[spell.rarity]}`);
 }
 function initChantUI(){
   const form = document.getElementById('chant'), input = document.getElementById('chantText'), micBtn = document.getElementById('chantMic');
