@@ -1,7 +1,8 @@
 'use strict';
 // ---- 詠唱で出る生き物 ----
 // 絵（画像）は使わない。部品（頭・節をつないだ体・つばさ・角・尾）と、属性の気配（粒・ゆらぎ）を組み合わせて描く。
-// 見せ方：中は淡く透かし、ふちを明るくして形を読ませる（白く塗りつぶさない）。白は、命中の一瞬だけ。
+// 見せ方：中は淡く透かし、ふちを明るくして形を読ませる（白く塗りつぶさない）。体の下とまわりを少し暗くして、うしろの魔法陣の線から浮かせる。
+//         上から見おろした形で描く（頭が先、体と尾がうしろへ流れ、つばさは左右に開く）。
 // 位置：道すじ（proj）の上を進む「頭」に、横へのずれ（動きの型）を足す。体の節は、頭が通ったあとをたどる。
 //       どの節も、毎フレーム proj() を通して置く（撃ったあとにスマホを振っても、先は的についていく）。
 //       遠近はそのまま使うと手前が巨大になるので、大きさは「出てきたときを 1、着くときを CR_FAR」としてゆるく縮める。
@@ -27,7 +28,8 @@ const CR_AURA_RARE = [0.55, 1, 1.4, 1.8];   // レア度ごとの、気配（粒
 const CR_AURA_N = [0.6, 0.8, 1];            // 装填の枚数ごとの、気配の多さ
 const CR_FILL = 1;                          // 体の中の濃さの倍率（小さいほど透ける）
 const CR_RIM = 1;                           // ふちの明るさの倍率
-const CR_UNDER = 0.45;                      // 体の下に敷く暗い色の濃さ（明るい背景でも形が読めるように。0 で敷かない）
+const CR_UNDER = 0.5;                       // 体の下に敷く暗い色の濃さ（うしろの魔法陣の線や明るい景色から、形を浮かせる。0 で敷かない。小さくすると、より透ける）
+const CR_SHADE = 0.24;                      // 体のまわりに落とす、やわらかい影の濃さ（0 で落とさない）
 const CR_GOLD = 45;                         // SR・SSR の差し色（金）の色相
 const CR_END_SEC = 0.45;                    // 着いたあと、消えきるまでの秒数
 const CR_PMAX = 160;                        // 粒の数の上限
@@ -36,23 +38,24 @@ const CR_NMAX = 56;                         // 体の節の数の上限
 // ---- 姿ごとの値（長さは、幅 390px の画面で、出てきたときの px）----
 // nodes：節の数、gap：節の間隔、wide：体の太さ（半分）、head：頭の長さ、swim：体のくねりの大きさ、swimK：くねりの細かさ、wing：つばさの長さ
 const CR_FORM = {
-  dragon:  { nodes: 30, gap: 6.2, wide: 14,  head: 52, swim: 6,   swimK: 0.5,  wing: 80 },
+  dragon:  { nodes: 34, gap: 6.4, wide: 12,  head: 48, swim: 6,   swimK: 0.45, wing: 84 },
   serpent: { nodes: 46, gap: 5.4, wide: 9,   head: 34, swim: 11,  swimK: 0.42, wing: 0 },
-  orb:     { nodes: 9,  gap: 6,   wide: 14,  head: 20, swim: 3,   swimK: 0.7,  wing: 0 },
+  orb:     { nodes: 12, gap: 7,   wide: 19,  head: 29, swim: 4,   swimK: 0.6,  wing: 0 },
 };
 const CREATURE_FORMS = Object.keys(CR_FORM);
 
 // ---- 属性ごとの値 ----
 // rim・fill・hot：ふち・中・強い所の色 [色相のずれ, あざやかさ%, 明るさ%]。fillA・rimA：中とふちの濃さ。under：下に敷く暗さの倍率。rate：1 秒に出す粒の数
+// core：体の芯のあかりの強さ。spike：ふちのとげ [何節おき, 長さ（体の太さの何倍）, うしろへの傾き(rad), ゆらぎ（0 なし・1 炎のようにゆれる・2 稲妻のようにはねる）]
 const CR_ELEM = {
-  fire:    { rim: [16, 100, 68], fill: [-6, 100, 50], hot: [28, 100, 76],  fillA: 0.16,  rimA: 0.85, under: 1,   rate: 44 },
-  ice:     { rim: [0, 90, 80],   fill: [8, 80, 64],   hot: [-6, 100, 92],  fillA: 0.10,  rimA: 0.85, under: 1,   rate: 26 },
-  thunder: { rim: [0, 100, 70],  fill: [-6, 100, 55], hot: [4, 100, 88],   fillA: 0.09,  rimA: 0.85, under: 1,   rate: 30 },
-  wind:    { rim: [0, 65, 74],   fill: [4, 55, 58],   hot: [-6, 80, 86],   fillA: 0.035, rimA: 0.3,  under: 0.2, rate: 26 },
-  water:   { rim: [-6, 95, 72],  fill: [4, 90, 56],   hot: [-22, 100, 86], fillA: 0.14,  rimA: 0.75, under: 1,   rate: 24 },
-  earth:   { rim: [-2, 46, 60],  fill: [-6, 42, 42],  hot: [6, 55, 74],    fillA: 0.22,  rimA: 0.7,  under: 1.5, rate: 20 },
-  light:   { rim: [2, 90, 84],   fill: [0, 80, 72],   hot: [4, 100, 93],   fillA: 0.08,  rimA: 0.8,  under: 0.7, rate: 16 },
-  dark:    { rim: [0, 95, 68],   fill: [-6, 80, 42],  hot: [26, 100, 80],  fillA: 0.07,  rimA: 0.85, under: 1.9, rate: 24 },
+  fire:    { rim: [16, 100, 68], fill: [-6, 100, 50], hot: [28, 100, 76],  fillA: 0.24,  rimA: 0.85, under: 1,   rate: 44, core: 1.7, spike: [2, 1.2, 1.0, 1] },
+  ice:     { rim: [-4, 85, 86],  fill: [14, 85, 62],  hot: [-6, 100, 93],  fillA: 0.16,  rimA: 0.85, under: 1,   rate: 26, core: 0.6, spike: [3, 1.6, 0.45, 0] },
+  thunder: { rim: [0, 100, 70],  fill: [-6, 100, 55], hot: [4, 100, 88],   fillA: 0.15,  rimA: 0.85, under: 1,   rate: 30, core: 1, spike: [3, 1.1, 0.3, 2] },
+  wind:    { rim: [0, 65, 74],   fill: [4, 55, 58],   hot: [-6, 80, 86],   fillA: 0.06,  rimA: 0.5,  under: 0.55, rate: 44, core: 0.5, spike: null },
+  water:   { rim: [-6, 95, 72],  fill: [4, 90, 56],   hot: [-22, 100, 86], fillA: 0.22,  rimA: 0.75, under: 1,   rate: 24, core: 1, spike: null },
+  earth:   { rim: [-2, 46, 60],  fill: [-6, 42, 42],  hot: [6, 55, 74],    fillA: 0.22,  rimA: 0.7,  under: 1.5, rate: 20, core: 0.5, spike: [3, 0.75, 0.35, 0] },
+  light:   { rim: [2, 90, 84],   fill: [0, 85, 64],   hot: [4, 100, 93],   fillA: 0.14,  rimA: 0.8,  under: 0.7, rate: 16, core: 1.4, spike: null },
+  dark:    { rim: [0, 95, 68],   fill: [-6, 80, 42],  hot: [26, 100, 80],  fillA: 0.10,  rimA: 0.85, under: 1.9, rate: 24, core: 0.3, spike: [2, 1.2, 1.1, 0] },
 };
 
 // ---- 小さな道具 ----
@@ -101,7 +104,7 @@ function crPath(c, u, o){
     case 'orbit': {              // 旋回：道すじのまわりを大きく 1 周してから、まっすぐ襲いかかる
       const T1 = 0.64; let r, th;
       if (u < T1){ const w = u / T1; k = 0.4 * w * (0.6 + 0.4 * w); r = 78 * inn; th = v.ph + v.side * TAU * w; }
-      else { const w = (u - T1) / (1 - T1); k = 0.4 + 0.6 * w * w * (3 - 2 * w) * (0.5 + 0.5 * w) / 1; r = 78 * Math.pow(1 - w, 1.6); th = v.ph + v.side * (TAU + 1.3 * w); k = 0.4 + 0.6 * (w * (0.35 + 0.65 * w)); }
+      else { const w = (u - T1) / (1 - T1); k = 0.4 + 0.6 * w * (0.35 + 0.65 * w); r = 78 * Math.pow(1 - w, 1.6); th = v.ph + v.side * (TAU + 1.3 * w); }
       x = r * Math.cos(th); y = r * 0.72 * Math.sin(th); break; }
     case 'zigzag': {             // ジグザグ：鋭く折れながら進む
       const e = inn * Math.pow(1 - u, 0.6), s = u * 4.6 * v.fq + 0.25, tri = Math.abs((s - Math.floor(s)) * 2 - 1) * 2 - 1;
@@ -130,7 +133,7 @@ function crAt(c, tau, o){
 }
 // 姿ごとの、体の太さ（s：0＝頭 → 1＝尾の先）
 function crWide(form, s){
-  if (form === 'dragon') return s < 0.2 ? 0.62 + 0.38 * crSm(s / 0.2) : 0.08 + 0.92 * Math.pow(1 - (s - 0.2) / 0.8, 0.9);
+  if (form === 'dragon') return s < 0.2 ? 0.62 + 0.38 * crSm(s / 0.2) : 0.07 + 0.93 * Math.pow(1 - (s - 0.2) / 0.8, 0.9) + 0.3 * Math.max(0, 1 - Math.abs(s - 0.93) / 0.07);     // 尾の先に、小さなひし形
   if (form === 'serpent') return s < 0.12 ? 0.78 + 0.22 * (s / 0.12) : 0.05 + 0.95 * Math.pow(1 - (s - 0.12) / 0.88, 0.7);
   return Math.pow(1 - s, 1.25);
 }
@@ -225,7 +228,7 @@ function crDrawParts(c, t, pass){              // pass 0：暗いもの（ふつ
 function crAura(c, t, dt){
   const n = crI1 - crI0; if (n < 1) return;
   c.em += c.E.rate * c.aura * dt;
-  const S = c.spr, m = c.U * c.sz;
+  const S = c.spr, m = c.U * c.sz * 1.3;
   while (c.em >= 1){
     c.em -= 1;
     const r = Math.random(), i = crI0 + Math.min(n - 1, r * r * n | 0), sd = Math.random() < 0.5 ? -1 : 1, q = crQ[i], w = crW[i] + 2 * q;
@@ -255,7 +258,7 @@ function crAura(c, t, dt){
 }
 // 命中：属性の粒になって、的の場所で散る
 function crBurst(c, x, y){
-  const S = c.spr, m = c.U * c.sz, n = Math.round(34 * c.aura), q = CR_FAR + 0.25;
+  const S = c.spr, m = c.U * c.sz * 1.3, n = Math.round(34 * c.aura), q = CR_FAR + 0.25;
   for (let j = 0; j < n; j++){
     const a = Math.random() * TAU, cs = Math.cos(a), sn = Math.sin(a), v = 60 + Math.random() * 240, life = 0.22 + Math.random() * 0.26, rv = Math.random(); let p;
     switch (c.el){
@@ -289,9 +292,9 @@ function spawnCreature(spec, n, rarity, t){
   crt = { spec, n, rare: rarity, t0: t, last: t, dur, z: BEAM_Z0, arrived: false, end: 0, hit: false, dir: anchorDir,
     form, f, el, E, motion, v, hue, U, sz: CR_SIZE_RARE[rarity] * CR_SIZE_N[n - 1], slim: n === 1 ? 0.8 : 1, aura: CR_AURA_RARE[rarity] * CR_AURA_N[n - 1],
     N: Math.min(CR_NMAX, Math.round(f.nodes * (n === 1 ? 0.85 : 1)) + rarity * 2), L0: Math.max(60, Math.hypot(b[0] - a[0], b[1] - a[1])),
-    ex: 0, ey: -1, tx: 0, ty: 0, vEnd: 200, em: 0, hs: 1,
+    ex: 0, ey: -1, tx: 0, ty: 0, vEnd: 200, em: 0,
     col: { rim: crHsl(hue + E.rim[0], E.rim[1], E.rim[2]), fill: crHsl(hue + E.fill[0], E.fill[1], E.fill[2]), hot: crHsl(hue + hc[0], hc[1], hc[2]),
-           acc: gold ? crHsl(CR_GOLD, 100, 70) : crHsl(hue + hc[0], hc[1], hc[2]), under: el === 'dark' ? 'rgb(5,1,12)' : el === 'earth' ? 'rgb(22,14,6)' : 'rgb(3,5,12)' },
+           acc: gold ? crHsl(CR_GOLD, 100, 70) : crHsl(hue + hc[0], hc[1], hc[2]), gold: crHsl(CR_GOLD, 100, 70), under: el === 'dark' ? 'rgb(5,1,12)' : el === 'earth' ? 'rgb(22,14,6)' : 'rgb(3,5,12)' },
     spr: { soft: crSpr('soft', hue + E.fill[0], E.fill[1], Math.min(70, E.fill[2] + 8)), hot: crSpr('soft', hue + hc[0], hc[1], hc[2]), ring: crSpr('ring', hue + E.rim[0], E.rim[1], E.rim[2]),
            gold: crSpr('soft', CR_GOLD, 100, 72), goldRing: crSpr('ring', CR_GOLD, 100, 70), dark: crSpr('dark', 0, 0, 0) } };
   crPN = 0;
@@ -336,102 +339,137 @@ function crRibbon(c, t, i0, i1){
   for (let i = i1 - 1; i >= i0; i--){ const w = crW[i] * (1 + jit * (crH(i + 60, fl) - 0.5)); g.lineTo(crX[i] - crNx[i] * w, crY[i] - crNy[i] * w); }
   g.closePath();
 }
-// いまの経路を塗る：下に敷く暗い色（うしろの線をかくして、形を読ませる）→ 淡い中身 → にじむふち → 明るいふち
-// px：1px にあたる長さ（拡大した中で呼ぶとき用）。fillK・underK：中身と、下の暗さの倍率
-function crPaint(c, a, px, fillK, underK){
-  const E = c.E, col = c.col, ua = CR_UNDER * E.under * underK * a;
+// いまの経路を塗る：下に敷く暗い色（うしろの線をかくして、形を読ませる）→ 淡い中身 → にじむふち（細い 1 本線にはしない）
+// px：1px にあたる長さ（拡大した中で呼ぶとき用）。fillK・underK：中身と、下の暗さの倍率。lw：ふちの太さ（px）
+function crPaint(c, a, px, fillK, underK, lw){
+  const E = c.E, col = c.col, ua = CR_UNDER * E.under * underK * a, ra = E.rimA * CR_RIM * a;
   if (ua > 0.004){ g.globalCompositeOperation = 'source-over'; g.fillStyle = col.under; g.globalAlpha = ua > 0.92 ? 0.92 : ua; g.fill(); g.globalCompositeOperation = 'lighter'; }
   g.fillStyle = col.fill; g.globalAlpha = Math.min(1, E.fillA * CR_FILL * fillK * a); g.fill();
-  g.strokeStyle = col.rim; g.globalAlpha = E.rimA * CR_RIM * 0.16 * a; g.lineWidth = 8 * px; g.stroke();
-  g.globalAlpha = Math.min(1, E.rimA * CR_RIM * a); g.lineWidth = 2 * px; g.stroke();
+  g.strokeStyle = col.rim; g.globalAlpha = ra * 0.07; g.lineWidth = lw * 4.4 * px; g.stroke();
+  g.globalAlpha = ra * 0.2; g.lineWidth = lw * 2.1 * px; g.stroke();
+  g.globalAlpha = Math.min(1, ra * 0.6); g.lineWidth = lw * px; g.stroke();
 }
 function crDrawBody(c, t, a, el){
   const i0 = crI0, i1 = crI1, n = i1 - i0, E = c.E, col = c.col, S = c.spr, f = c.f, m = c.U * c.sz;
   if (n < 1) return;
-  const headOn = !(c.hit && c.end && el > 0.1), ha = c.hit && c.end ? a * Math.max(0, 1 - el / 0.1) : a;     // 命中のあと、頭はすぐ消える（体は的へ流れこむ）
+  const ha = c.hit && c.end ? a * Math.max(0, 1 - el / 0.1) : a;      // 命中のあと、頭はすぐ消える（体は的へ流れこむ）
   // 頭の向き
   const j = Math.min(i1 - 1, i0 + 2); let hx = crX[i0] - crX[j], hy = crY[i0] - crY[j]; const hl = Math.hypot(hx, hy);
   if (hl > 0.3){ hx /= hl; hy /= hl; } else { hx = c.ex; hy = c.ey; }
-  const ang = Math.atan2(hy, hx), q0 = crQ[i0], em0 = crSm(crT[0] / 0.1), HS = f.head * m * q0 * (0.35 + 0.65 * em0); c.hs = HS;
-  // つばさ（体より先に描く）
-  if (f.wing && n > 3) crWings(c, t, a, i0, i1);
-  // 体：下に敷く暗い色 → 淡い中身 → 明るいふち
+  const ang = Math.atan2(hy, hx), q0 = crQ[i0], HS = f.head * m * q0 * (0.35 + 0.65 * crSm(crT[0] / 0.1)), lw = (1.5 + 1.5 * q0) * Math.sqrt(m);
+  // まわりを少し暗くする：うしろの魔法陣の線や、明るい景色から、形を浮かせる（やわらかい影。体より広い）
+  if (CR_SHADE > 0){ g.globalCompositeOperation = 'source-over'; const sa = CR_SHADE * E.under * a;
+    for (let i = i0; i < i1; i += 2) crDot(S.dark, crX[i], crY[i], crW[i] * 2.6 + 9 * m * crQ[i], sa);
+    crDot(S.dark, crX[i0], crY[i0], HS * 0.95, sa * 1.3);
+    g.globalCompositeOperation = 'lighter'; }
+  if (f.wing && n > 3) crWings(c, t, a, i0, i1, lw);          // つばさ（体より先に描く）
   if (n > 1){
-    crRibbon(c, t, i0, i1); crPaint(c, a, 1, 1, 1);
-    if (c.el === 'dark') for (let i = i0; i < i1; i += 2) crDot(S.dark, crX[i], crY[i], crW[i] * 1.2, 0.4 * a);
+    crRibbon(c, t, i0, i1); crPaint(c, a, 1, 1, 1, lw);
+    // 中のあかり：体の芯が、属性の色でぼんやり光る（白くはしない）。闇は光らせず、暗い芯のままにする
+    if (c.el !== 'dark') for (let i = i0; i < i1; i += 2) crDot(S.soft, crX[i], crY[i], crW[i] * 1.7 + 1, 0.14 * E.core * a);
+    if (E.spike) crSpikes(c, t, a, i0, i1, lw);
     // 背すじの光の点
-    if (c.form !== 'orb') for (let i = i0 + 3; i < i1 - 1; i += c.v.every){ const s = i / (c.N - 1); if (s > 0.9) break; crDot(c.rare >= 2 ? S.gold : S.hot, crX[i], crY[i], crW[i] * 0.5 + 1, 0.55 * a); }
+    if (c.form !== 'orb') for (let i = i0 + 3; i < i1 - 1; i += c.v.every){ if (i / (c.N - 1) > 0.88) break; crDot(c.rare >= 2 ? S.gold : S.hot, crX[i], crY[i], crW[i] * 0.5 + 1, 0.5 * a); }
+    if (c.rare >= 2) crStreamers(c, t, a, i0, i1);
   }
-  // 頭
-  if (headOn && ha > 0.01){
+  if (ha > 0.01){                                             // 頭
     g.save(); g.translate(crX[i0], crY[i0]); g.rotate(ang); g.scale(HS, HS);
-    if (c.form === 'dragon') crHeadDragon(c, t, ha, HS); else if (c.form === 'serpent') crHeadSerpent(c, t, ha, HS); else crHeadOrb(c, t, ha, HS);
+    if (c.el === 'light') crHalo(c, t, ha);
+    if (c.form === 'dragon') crHeadDragon(c, t, ha, HS, lw); else if (c.form === 'serpent') crHeadSerpent(c, t, ha, HS, lw); else crHeadOrb(c, t, ha, HS);
     g.restore();
   }
 }
+// 属性のとげ：体のふちから、うしろへ流れる小さな三角（炎のゆらぎ・氷の結晶・岩・いばら）。左右たがいちがいに並べる
+function crSpikes(c, t, a, i0, i1, lw){
+  const sp = c.E.spike, ev = sp[0], fl = Math.floor(t * 24), cs = Math.cos(sp[2]), sn = Math.sin(sp[2]);
+  g.beginPath();
+  for (let i = i0 + 2; i < i1 - 2; i += ev){
+    if (i / (c.N - 1) > 0.86) break;
+    const sd = ((i / ev) | 0) % 2 ? 1 : -1, nx = crNx[i] * sd, ny = crNy[i] * sd, tx = crNy[i], ty = -crNx[i], w = crW[i];
+    let L = w * sp[1]; if (sp[3] === 1) L *= 0.55 + 1.0 * (0.5 + 0.5 * Math.sin(t * 17 + i * 2.4)) * (0.5 + 0.5 * Math.sin(t * 11.3 + i * 1.7)); else if (sp[3] === 2) L *= 0.4 + 1.2 * crH(i, fl);
+    const bx = crX[i] + nx * w, by = crY[i] + ny * w, cx = crX[i + 1] + crNx[i + 1] * sd * crW[i + 1], cy = crY[i + 1] + crNy[i + 1] * sd * crW[i + 1];
+    g.moveTo(bx, by); g.lineTo((bx + cx) / 2 + (nx * cs - tx * sn) * L, (by + cy) / 2 + (ny * cs - ty * sn) * L); g.lineTo(cx, cy); g.closePath();
+  }
+  g.fillStyle = c.col.rim; g.globalAlpha = 0.34 * c.E.rimA * a; g.fill();
+  g.strokeStyle = c.col.rim; g.globalAlpha = 0.12 * c.E.rimA * a; g.lineWidth = lw * 2; g.stroke();
+}
+// SR 以上：頭のうしろから流れる、2 本の金の帯
+function crStreamers(c, t, a, i0, i1){
+  const m = c.U * c.sz, e = Math.min(i1, i0 + 2 + Math.round(c.N * 0.55));
+  g.beginPath();
+  for (let sd = -1; sd <= 1; sd += 2) for (let i = i0 + 1; i < e; i++){
+    const s = (i - i0) / (e - i0), off = (crW[i] + (3 + 15 * s) * m * crQ[i]) * sd + Math.sin(t * 7 - i * 0.55 + sd) * 6 * s * m * crQ[i], x = crX[i] + crNx[i] * off, y = crY[i] + crNy[i] * off;
+    if (i === i0 + 1) g.moveTo(x, y); else g.lineTo(x, y);
+  }
+  g.strokeStyle = c.col.gold; g.globalAlpha = 0.08 * a; g.lineWidth = 8 * Math.sqrt(m); g.stroke(); g.globalAlpha = 0.42 * a; g.lineWidth = 2.6 * Math.sqrt(m); g.stroke();
+}
+// 光の属性：頭のうしろの光の輪と、ゆっくり回る光の筋（頭の中で呼ぶ。長さ 1＝頭の長さ）
+function crHalo(c, t, a){
+  crDot(c.spr.ring, -0.05, 0, 0.72, 0.5 * a);
+  g.beginPath();
+  for (let k = 0; k < 7; k++){ const an = k / 7 * TAU + t * 0.9 + c.v.ph, L = 1.25 + 0.5 * crH(k, 3), w = 0.07; g.moveTo(-0.05, 0); g.lineTo(-0.05 + Math.cos(an - w) * L, Math.sin(an - w) * L); g.lineTo(-0.05 + Math.cos(an + w) * L, Math.sin(an + w) * L); }
+  g.fillStyle = c.col.hot; g.globalAlpha = 0.1 * a; g.fill();
+}
+// 半分の輪郭（x, y の並び）を、左右対称の形にして経路に足す
+function crSym(P){
+  g.beginPath(); g.moveTo(P[0], 0);
+  for (let k = 2; k < P.length; k += 2) g.lineTo(P[k], P[k + 1]);
+  for (let k = P.length - 2; k >= 2; k -= 2) g.lineTo(P[k], -P[k + 1]);
+  g.closePath();
+}
 // 竜の頭（上から見た形）。向きは +x、長さが 1
-function crHeadDragon(c, t, a, HS){
+const CR_HEAD_DRAGON = [0.66, 0, 0.6, 0.09, 0.46, 0.12, 0.3, 0.11, 0.14, 0.2, 0.02, 0.3, -0.2, 0.44, -0.17, 0.28, -0.34, 0.2, -0.44, 0.13];
+const CR_HEAD_SERPENT = [0.6, 0, 0.5, 0.13, 0.3, 0.25, 0.05, 0.33, -0.2, 0.31, -0.42, 0.2];
+function crHeadDragon(c, t, a, HS, lw){
   const col = c.col, v = c.v, px = 1 / HS;
   // 角：うしろへ流れる
   g.beginPath();
   for (let sd = -1; sd <= 1; sd += 2) for (let h = 0; h < v.horns + (c.rare >= 3 ? 1 : 0); h++){
-    const L = v.hornLen * (h ? 0.6 : 1) * 0.95, bx = -0.1 - h * 0.12, by = 0.24 + h * 0.07, sp = 0.36 + h * 0.3;
-    g.moveTo(bx + 0.09, by * sd); g.quadraticCurveTo(bx - L * 0.4, (by + L * sp * 0.9) * sd, bx - L, (by + L * sp) * sd); g.quadraticCurveTo(bx - L * 0.5, (by + L * sp * 0.35) * sd, bx - 0.1, (by - 0.05) * sd); g.closePath();
+    const L = v.hornLen * (h ? 0.62 : 1.05), bx = -0.06 - h * 0.14, by = 0.17 + h * 0.1, sp = 0.3 + h * 0.34;
+    g.moveTo(bx + 0.1, by * sd); g.quadraticCurveTo(bx - L * 0.4, (by + L * sp * 0.9) * sd, bx - L, (by + L * sp) * sd); g.quadraticCurveTo(bx - L * 0.5, (by + L * sp * 0.3) * sd, bx - 0.12, (by - 0.06) * sd); g.closePath();
   }
-  g.fillStyle = col.acc; g.globalAlpha = 0.3 * a; g.fill(); g.strokeStyle = col.acc; g.globalAlpha = 0.9 * a; g.lineWidth = 1.8 * px; g.stroke();
-  // 頭の輪郭
-  const sn = v.snout;
-  g.beginPath(); g.moveTo(0.62 * sn, 0);
-  for (let sd = 1; sd >= -1; sd -= 2){
-    const P = [0.57 * sn, 0.10, 0.42 * sn, 0.135, 0.24, 0.125, 0.06, 0.24, -0.12, 0.33, -0.28, 0.29, -0.4, 0.17];
-    if (sd === 1) for (let k = 0; k < P.length; k += 2) g.lineTo(P[k], P[k + 1]); else for (let k = P.length - 2; k >= 0; k -= 2) g.lineTo(P[k], -P[k + 1]);
-  }
-  g.closePath();
-  crPaint(c, a, px, 1.5, 1.2);
-  // 目
-  crDot(c.spr.hot, 0.1, 0.17, 0.085, 0.95 * a); crDot(c.spr.hot, 0.1, -0.17, 0.085, 0.95 * a);
+  g.fillStyle = col.acc; g.globalAlpha = 0.32 * a; g.fill(); g.strokeStyle = col.acc; g.globalAlpha = 0.14 * a; g.lineWidth = lw * 2.2 * px; g.stroke(); g.globalAlpha = 0.7 * a; g.lineWidth = lw * 0.8 * px; g.stroke();
+  crSym(CR_HEAD_DRAGON); crPaint(c, a, px, 1.6, 1.2, lw);
+  crDot(c.spr.soft, 0.05, 0, 0.42, 0.22 * c.E.core * a);
+  g.beginPath(); g.moveTo(0.56, 0); g.lineTo(-0.3, 0); g.strokeStyle = col.rim; g.globalAlpha = 0.16 * a; g.lineWidth = lw * 1.6 * px; g.stroke();     // 鼻すじ
+  crDot(c.spr.hot, 0.12, 0.17, 0.1, a); crDot(c.spr.hot, 0.12, -0.17, 0.1, a);          // 目
 }
-function crHeadSerpent(c, t, a, HS){
+function crHeadSerpent(c, t, a, HS, lw){
   const col = c.col, px = 1 / HS;
-  g.beginPath(); g.moveTo(0.6, 0);
-  for (let sd = 1; sd >= -1; sd -= 2){
-    const P = [0.5, 0.13, 0.3, 0.25, 0.05, 0.33, -0.2, 0.31, -0.42, 0.2];
-    if (sd === 1) for (let k = 0; k < P.length; k += 2) g.lineTo(P[k], P[k + 1]); else for (let k = P.length - 2; k >= 0; k -= 2) g.lineTo(P[k], -P[k + 1]);
-  }
-  g.closePath();
-  crPaint(c, a, px, 1.5, 1.2);
   // 舌：ときどき、ちろりと出る
-  const fk = Math.sin(t * 9 + c.v.ph); if (fk > 0.2){ const L = 0.3 * (fk - 0.2) / 0.8;
-    g.beginPath(); g.moveTo(0.6, 0); g.lineTo(0.6 + L, 0); g.lineTo(0.6 + L * 1.6, 0.08); g.moveTo(0.6 + L, 0); g.lineTo(0.6 + L * 1.6, -0.08);
-    g.strokeStyle = col.acc; g.globalAlpha = 0.8 * a; g.lineWidth = 1.6 * px; g.stroke(); }
-  crDot(c.spr.hot, 0.24, 0.17, 0.085, 0.95 * a); crDot(c.spr.hot, 0.24, -0.17, 0.085, 0.95 * a);
+  const fk = Math.sin(t * 9 + c.v.ph); if (fk > 0.2){ const L = 0.34 * (fk - 0.2) / 0.8;
+    g.beginPath(); g.moveTo(0.58, 0); g.lineTo(0.6 + L, 0); g.lineTo(0.6 + L * 1.6, 0.09); g.moveTo(0.6 + L, 0); g.lineTo(0.6 + L * 1.6, -0.09);
+    g.strokeStyle = col.acc; g.globalAlpha = 0.7 * a; g.lineWidth = lw * 0.8 * px; g.stroke(); }
+  crSym(CR_HEAD_SERPENT); crPaint(c, a, px, 1.6, 1.2, lw);
+  crDot(c.spr.soft, 0.05, 0, 0.4, 0.2 * c.E.core * a);
+  crDot(c.spr.hot, 0.24, 0.17, 0.1, a); crDot(c.spr.hot, 0.24, -0.17, 0.1, a);
 }
+// 玉：中の透けた球と、まわりを回る小さな光
 function crHeadOrb(c, t, a, HS){
-  const S = c.spr;
-  if (CR_UNDER * c.E.under > 0.004){ g.globalCompositeOperation = 'source-over'; crDot(S.dark, 0, 0, 1.05, Math.min(0.9, CR_UNDER * c.E.under * 1.6 * a)); g.globalCompositeOperation = 'lighter'; }
-  crDot(S.soft, 0, 0, 1.5, 0.3 * a); crDot(S.ring, 0, 0, 1.0, 0.9 * a); crDot(S.hot, 0, 0, 0.42, 0.55 * a);
+  const S = c.spr, ua = CR_UNDER * c.E.under * 1.3 * a;
+  if (ua > 0.004){ g.globalCompositeOperation = 'source-over'; crDot(S.dark, 0, 0, 1.05, Math.min(0.9, ua)); g.globalCompositeOperation = 'lighter'; }
+  crDot(S.soft, 0, 0, 1.6, 0.18 * a); crDot(S.ring, 0, 0, 1.0, 0.85 * a); crDot(S.soft, 0, 0, 0.5, 0.3 * a);
   for (let k = 0; k < 2 + c.rare; k++){ const ph = t * (7 + k * 1.3) + k * 2.4 + c.v.ph, tl = k * 1.1 + c.v.ph, ox = Math.cos(ph) * 1.5, oy = Math.sin(ph) * 0.55, cs = Math.cos(tl), sn = Math.sin(tl);
     crDot(k === 0 && c.rare >= 2 ? S.gold : S.hot, ox * cs - oy * sn, ox * sn + oy * cs, 0.3, 0.8 * a); }
 }
-// つばさ：肩の節から左右へ。はばたきで、長さと向きが変わる
-function crWings(c, t, a, i0, i1){
-  const col = c.col, f = c.f, m = c.U * c.sz, pairs = c.rare >= 2 ? 2 : 1;
+// つばさ：肩の節から左右へ。はばたきで、長さと向きが変わる。SR 以上は、うしろに小さな 2 組目
+function crWingPath(c, i, sd, sweep, S, span, bones){
+  g.save(); g.translate(crX[i], crY[i]); g.rotate(Math.atan2(-crNx[i], crNy[i])); g.scale(1, sd); g.translate(0, crW[i] * 0.4); g.rotate(-sweep); g.scale(S * 0.8, S * span);
+  g.beginPath();
+  if (bones){ g.moveTo(0.34, 0.44); g.lineTo(-0.5, 0.76); g.moveTo(0.34, 0.44); g.lineTo(-0.72, 0.42); }
+  else { g.moveTo(0.14, 0); g.quadraticCurveTo(0.36, 0.18, 0.34, 0.44); g.quadraticCurveTo(0.2, 0.82, -0.1, 1.0);
+    g.quadraticCurveTo(-0.2, 0.72, -0.5, 0.76); g.quadraticCurveTo(-0.44, 0.5, -0.72, 0.42); g.quadraticCurveTo(-0.5, 0.2, -0.44, 0); g.closePath(); }
+  g.restore();
+}
+function crWings(c, t, a, i0, i1, lw){
+  const f = c.f, m = c.U * c.sz, pairs = c.rare >= 2 ? 2 : 1;
   for (let pr = 0; pr < pairs; pr++){
     const i = Math.round(c.N * (0.2 + pr * 0.2)); if (i < i0 + 1 || i >= i1 - 1) continue;
-    const tx = crNy[i], ty = -crNx[i], ang = Math.atan2(ty, tx), ph = t * c.v.flap - pr * 0.9, fl = Math.cos(ph);
-    const S = f.wing * c.v.wing * m * crQ[i] * (pr ? 0.62 : 1) * crSm(crT[i] / 0.12), span = 0.72 + 0.28 * fl, sweep = 0.3 * (0.5 - 0.5 * fl) + 0.12;
+    const fl = Math.cos(t * c.v.flap - pr * 0.9), S = f.wing * c.v.wing * m * crQ[i] * (pr ? 0.62 : 1) * crSm(crT[i] / 0.12), span = 0.7 + 0.3 * fl, sweep = 0.34 * (0.5 - 0.5 * fl) + 0.1;
     if (S < 1) continue;
     for (let sd = -1; sd <= 1; sd += 2){
-      g.save(); g.translate(crX[i], crY[i]); g.rotate(ang); g.scale(1, sd); g.translate(0, crW[i] * 0.5); g.rotate(-sweep); g.scale(S, S * span);
-      // 骨（腕と指）と、指の間の膜
-      g.beginPath(); g.moveTo(0.12, 0); g.lineTo(0.34, 0.44); g.lineTo(-0.08, 1.0);
-      g.quadraticCurveTo(-0.2, 0.72, -0.5, 0.76); g.quadraticCurveTo(-0.46, 0.5, -0.72, 0.42); g.quadraticCurveTo(-0.5, 0.2, -0.42, 0); g.closePath();
-      g.restore();
-      crPaint(c, a * 0.85, 1, 0.8, 0.6);
-      g.save(); g.translate(crX[i], crY[i]); g.rotate(ang); g.scale(1, sd); g.translate(0, crW[i] * 0.5); g.rotate(-sweep); g.scale(S, S * span);
-      g.beginPath(); g.moveTo(0.34, 0.44); g.lineTo(-0.5, 0.76); g.moveTo(0.34, 0.44); g.lineTo(-0.72, 0.42);
-      g.restore();
-      g.strokeStyle = col.acc; g.globalAlpha = 0.4 * a; g.lineWidth = 2; g.stroke();
+      crWingPath(c, i, sd, sweep, S, span, false); crPaint(c, a * 0.9, 1, 1.1, 0.6, lw * 0.85);
+      crWingPath(c, i, sd, sweep, S, span, true); g.strokeStyle = c.col.acc; g.globalAlpha = 0.07 * a; g.lineWidth = lw * 2.4; g.stroke(); g.globalAlpha = 0.22 * a; g.lineWidth = lw; g.stroke();
     }
   }
 }
