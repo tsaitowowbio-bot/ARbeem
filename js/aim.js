@@ -23,7 +23,7 @@ function toScreen(d){            // 空間の向き → 画面の位置。z ≤ 
 const aimAngle = d => Math.acos(Math.max(-1, Math.min(1, dot(d, fwd()))));
 
 // ---- 的と当たり判定 ----
-// 的は、はじめに向いていた方向のまわりに浮かぶ。照準の輪（装填が多いほど大きい）に入った的に当たる。
+// 的は、はじめに向いていた方向のまわりに浮かぶ。発射の瞬間に、照準の輪（装填が多いほど大きい）に入っていた的に当たる。
 let targets = [], home = null, nextSpawn = 0, kills = 0, hits = 0, shots = 0, popups = [];
 const T_HUE = [45, 320, 186];
 function spawnTarget(t){
@@ -41,21 +41,25 @@ function updateTargets(t){
   if (targets.filter(q => !q.dead).length < TARGETS && t > nextSpawn){ spawnTarget(t); nextSpawn = t + 0.5; }
 }
 function lockedTargets(n){ return n ? targets.filter(q => !q.dead && aimAngle(q.d) < TOL[n] + q.size * 0.6) : []; }
-function judge(t){               // 着弾の瞬間に、照準の輪の中にいる的すべてに当たる
-  shots++; const got = lockedTargets(shotN);
-  if (!got.length){ sndMiss(); popups.push({ x: W/2, y: H/2 - 46, text: 'はずれ', born: t, hue: 200 }); return; }
-  hits++; sndHit(); navigator.vibrate && navigator.vibrate([50, 20, 160]); nextSpawn = t + 0.9;
-  punch = 1; shake += 38; flash = 1;                 // 画面ごと、どんと揺らす
-  backdropEvent('hit', shotN);
+function judge(t){               // 着弾：発射の瞬間に照準の輪に入っていた的すべてに当たる。当たった的を返す
+  shots++; const n = shotN, k = n - 1, got = shotTargets.filter(q => !q.dead);
+  if (!got.length){ sndMiss(); const [x, y] = proj(Z1); popups.push({ x, y: y - 40, text: 'はずれ', born: t, hue: 200 }); return got; }
+  hits++; sndHit(); navigator.vibrate && navigator.vibrate([[30, 10, 60], [40, 15, 110], [50, 20, 160]][k]); nextSpawn = t + 0.9;
+  punch = [0.5, 0.75, 1][k]; shake += [20, 30, 38][k]; flash = [0.45, 0.7, 1][k];      // 画面ごと、どんと揺らす
+  hold(HIT_STOP[k]);                                   // 当たった瞬間、絵を一瞬止める
+  backdropEvent('hit', n);
+  const amt = [0.5, 0.75, 1][k];
   for (const q of got){ q.dead = t; kills++; const p = toScreen(q.d), R = FC * q.size;
-    stars(p.sx, p.sy, 30, 620, 19, -260); shatter(p.sx, p.sy, R, q.hue);
-    lightRays(0, R * 7, 16, 0.6, q.hue, 0.6, [p.sx, p.sy]); lightRays(0, R * 4, 10, 0.4, 200, -0.9, [p.sx, p.sy]);
-    for (let k = 0; k < 36; k++){ const a = Math.random() * TAU, v = 150 + Math.random() * 500;
+    stars(p.sx, p.sy, 30 * amt | 0, 620, 19, -260); shatter(p.sx, p.sy, R, q.hue);
+    withDir(q.d, () => { lightRays(Z1, R * (4 + 3 * amt), 16 * amt | 0, 0.6, q.hue, 0.6); lightRays(Z1, R * 4, 10 * amt | 0, 0.4, 200, -0.9); });
+    for (let j = 0; j < 36 * amt; j++){ const a = Math.random() * TAU, v = 150 + Math.random() * 500;
       part(p.sx + Math.cos(a) * R, p.sy + Math.sin(a) * R, Math.cos(a) * v, Math.sin(a) * v, 0.4 + Math.random() * 0.5, q.hue, 6 + Math.random() * 8, 3); }
     popups.push({ x: p.sx, y: p.sy - R - 14, text: '命中', born: t, hue: q.hue }); }
+  return got;
 }
 function drawTargets(t){
-  const m = Math.min(W, H), n = phase === 'load' ? circles.length : shotN, lock = lockedTargets(n);
+  const n = phase === 'load' ? circles.length : shotN;
+  const lock = (phase === 'fire' || phase === 'cool') ? shotTargets : lockedTargets(n);      // 撃ったあとは、当たる的が決まっている
   for (const q of targets){
     const p = toScreen(q.d), R = FC * q.size, hue = q.hue;
     if (q.dead){                                     // 砕ける：閃光と、広がる帯

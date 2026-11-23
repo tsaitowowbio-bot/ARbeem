@@ -1,9 +1,15 @@
 'use strict';
 // ---- 発射の合図（ボタン・声・スペースキー）。1 枚でも装填されていれば撃てる ----
+let igniteAt = [], fireAt = 0, held = false;      // 点火の時刻・絵を止める時刻（どちらも合図からの秒数）・止めたかどうか
 function trigger(){
   if (phase !== 'load' || !circles.length) return;
-  shotN = circles.length; phase = 'ready'; tPhase = now(); ignited = 0; charge = 0;
-  sndRiser(READY_SEC + IGNITE_GAP * shotN + 0.08); backdropEvent('trigger', shotN);
+  shotN = circles.length; phase = 'ready'; tPhase = now(); ignited = 0; charge = 0; held = false;
+  // 点火の間隔は、だんだん詰まる。枚数が少ないときは、詰まった側の間隔だけを使う
+  igniteAt = [READY_SEC];
+  for (let i = 1; i < shotN; i++) igniteAt.push(igniteAt[i - 1] + IGNITE_GAPS[IGNITE_GAPS.length - shotN + i]);
+  fireAt = igniteAt[shotN - 1] + LAST_GAP;
+  sndRiser(fireAt + PRE_HOLD[shotN - 1]); backdropEvent('trigger', shotN);
+  gather(8 + shotN * 10, fireAt, circles.map((c, i) => HUE[i]));       // まわりの光が、芯へ集まりはじめる
 }
 
 // ---- センサー ----
@@ -23,71 +29,93 @@ function onMotion(e){
   if (mag > SHAKE_G && t - lastShake > SHAKE_GAP){ lastShake = t; load(); }
 }
 
-// ---- 段取り：装填 → 発射の合図 → 手前から順に点火 → 発射 → 着弾 → 余韻 ----
+// ---- 段取り：装填 → 発射の合図 → 手前から順に点火 → 一瞬止まる → 発射 → 着弾 → 余韻 ----
+// 白く強い光は、的に当たった瞬間のためにとっておく。点火と発射は、色と形と動きで見せる。
 function stepLoad(t, dt){
   if (circles.length >= MAX) charge = 0;
   else if (steady) charge += dt / CHARGE_SEC; else charge = Math.max(0, charge - dt * 0.5);
   if (charge >= 1) load();
 }
 function igniteCircle(i, t){
-  const s = proj(DEPTH[i])[2]; circles[i].ignite = t;
-  ring(DEPTH[i], RADIUS[i] * 0.2, RADIUS[i] * 1.35, 0.4, HUE[i], 0.45);
-  flare(DEPTH[i], RADIUS[i] * s * 1.5, 0.5, HUE[i], 7);
-  burstFromCircle(i, 22, 300, 10); shake += 6;
-  sndIgnite(i); navigator.vibrate && navigator.vibrate(25);
+  circles[i].ignite = t;
+  ring(DEPTH[i], RADIUS[i] * 0.3, RADIUS[i] * 1.25, 0.35, HUE[i], 0.4, 0.5);
+  burstFromCircle(i, 10, 240, 8); shake += 2;
+  sndIgnite(i); navigator.vibrate && navigator.vibrate(20);
 }
 function stepReady(t){
-  const k = Math.floor((t - tPhase - READY_SEC) / IGNITE_GAP);
-  while (ignited <= k && ignited < shotN) igniteCircle(ignited++, t);
-  if (t - tPhase > READY_SEC + IGNITE_GAP * shotN + 0.08) beginFire(t);
+  const el = t - tPhase;
+  while (ignited < shotN && el >= igniteAt[ignited]) igniteCircle(ignited++, t);
+  squeeze = Math.pow(Math.min(1, el / fireAt), 2);             // 陣が少し絞られていく
+  if (!held && el >= fireAt){ held = true; hold(PRE_HOLD[shotN - 1]); }      // 発射の直前に、絵を一瞬止める
+  else if (held && holdLeft <= 0) beginFire(t);
+}
+function drawCore(t){                             // 集まった光の芯：大きく淡い形から、小さく強い形へ
+  const u = Math.min(1, (t - tPhase) / fireAt), [x, y, s] = proj(DEPTH[0]), R = RADIUS[0] * s;
+  glow(x, y, R * (0.9 - 0.6 * u), 0.08 + 0.22 * u, 200);
+  glow(x, y, R * (0.36 - 0.22 * u), 0.2 + 0.7 * u * u, 200);
 }
 function beginFire(t){
-  phase = 'fire'; tPhase = t; sndFire(shotN); shake = 30; flash = 1; backdropEvent('fire', shotN);
-  ring(Z0 + 0.3, 0.1, 1.9, 0.45, 200, 0.5);
-  flare(Z0 + 0.5, Math.min(W, H) * 0.3, 0.35, 200, 6);
-  const m = Math.min(W, H); lightRays(DEPTH[0], m * 0.7, 18, 0.8, 200, 0.5);          // 放射する光と、開く大きな陣
-  echoRing(2, DEPTH[0], m * 0.12, m * 0.62, 0.7, 5); echoRing(1, DEPTH[0], m * 0.06, m * 0.44, 0.8, -7, 0.06);
+  const n = shotN, k = n - 1, m = Math.min(W, H);
+  // 当たる的は、この瞬間に決まる。照準の輪に的が入っていれば、弾はその的へ向かう
+  shotTargets = lockedTargets(n);
+  anchorDir = shotTargets.length ? shotTargets.reduce((a, b) => aimAngle(a.d) <= aimAngle(b.d) ? a : b).d : fwd();
+  phase = 'fire'; tPhase = t; squeeze = -0.6; sndFire(n); backdropEvent('fire', n);
+  shake = [8, 16, 26][k]; flash = [0.08, 0.16, 0.28][k]; recoil = [0.35, 0.7, 1][k]; recV = 0;
+  ring(Z0 + 0.3, 0.1, [0.5, 0.7, 0.9][k], 0.4, 200, 0.5, 0.5);
+  flare(Z0 + 0.5, m * [0.07, 0.11, 0.16][k], 0.3, 200, n === 3 ? 6 : 0, 0.8);
+  if (n >= 2) lightRays(DEPTH[0], m * [0, 0.4, 0.65][k], [0, 10, 18][k], 0.7, 200, 0.5);
+  if (n === 3) echoRing(2, DEPTH[0], m * 0.12, m * 0.62, 0.7, 5);                 // 開く大きな陣
   const [vx, vy] = proj(Z1);                      // 画面の外へ流れる光（勢い）
-  for (let k2 = 0; k2 < 34; k2++){ const a = Math.random() * TAU, d = m * (0.25 + Math.random() * 0.5), v = 1100 + Math.random() * 1100;
+  for (let j = 0; j < [6, 16, 34][k]; j++){ const a = Math.random() * TAU, d = m * (0.25 + Math.random() * 0.5), v = 1100 + Math.random() * 1100;
     part(vx + Math.cos(a) * d, vy + Math.sin(a) * d, Math.cos(a) * v, Math.sin(a) * v, 0.32, 200, 7 + Math.random() * 6, 0.5); }
-  navigator.vibrate && navigator.vibrate([60, 20, 140]);
+  navigator.vibrate && navigator.vibrate([[30], [45, 15, 80], [60, 20, 140]][k]);
 }
-function passCircle(i, t){                        // 弾が陣を通り抜ける
-  const c = circles[i], [cx, cy, s] = proj(DEPTH[i]), R = RADIUS[i] * s; c.burst = t; shake += 14;
-  ring(DEPTH[i], 0.2, RADIUS[i] * 2.3, 0.55, HUE[i], 0.5); flare(DEPTH[i], R * 1.3, 0.4, HUE[i], 4);
-  burstFromCircle(i, 46, 560, 12); sndPass(i);
-  echoRing(i, DEPTH[i], R, R * 2.2, 0.7, 6); echoRing(i, DEPTH[i], R * 0.6, R * 1.7, 0.8, -5, 0.08);
-  lightRays(DEPTH[i], R * 2.2, 12, 0.5, HUE[i], i % 2 ? -0.8 : 0.8); stars(cx, cy, 12, 420, 15);
+function passCircle(i, t){                        // 弾が陣を通り抜ける：陣は割れて、かけらが漂う
+  const n = shotN, c = circles[i], [cx, cy, s] = proj(DEPTH[i]), R = RADIUS[i] * s; c.burst = t; shake += 5;
+  ring(DEPTH[i], 0.2, RADIUS[i] * (n === 1 ? 1.5 : 2.2), 0.5, HUE[i], 0.5, 0.6);
+  burstFromCircle(i, [14, 26, 40][n - 1], 480, 11); debris(cx, cy, R, HUE[i], [4, 6, 8][n - 1]); sndPass(i);
+  if (n === 3){ echoRing(i, DEPTH[i], R, R * 2.0, 0.6, 6); lightRays(DEPTH[i], R * 1.8, 10, 0.45, HUE[i], i % 2 ? -0.8 : 0.8); stars(cx, cy, 8, 420, 14); }
 }
-let lastRing = 0;
+let lastRing = 0, beamTail = 0;
 function stepFire(t){
-  const u = Math.min(1, (t - tPhase) / FLY_SEC);
-  bulletZ = zAt(Z0 + 0.5, Z1, Math.pow(u, 1.25));       // 画面の上で、狙った先まで止まらずに進む
+  const n = shotN, u = Math.min(1, (t - tPhase) / FLY[n - 1]);
+  bulletZ = zAt(Z0 + 0.5, Z1, Math.pow(u, 0.9));        // 画面の上で、狙った先まで止まらずに進む
   circles.forEach((c, i) => { if (!c.burst && bulletZ > DEPTH[i]) passCircle(i, t); });
-  if (t - lastRing > 0.04){ lastRing = t; ring(bulletZ, BR, BR * 6, 0.35, 200, 0.6, 0.7);   // 弾が残していく輪
-    const [bx, by, bs] = proj(bulletZ), R0 = Math.max(BR * 3.5 * bs, 9);                 // 弾道に並んで開く小さな陣と、こぼれる星
-    if (echoN++ % 2 === 0) echoRing((echoN >> 1) % 3, bulletZ, R0, R0 * 3, 0.6, echoN % 4 ? 8 : -8); stars(bx, by, 3, 160, 11, 30); }
-  wake = 1;
+  if (n >= 2 && t - lastRing > 0.045){ lastRing = t; ring(bulletZ, BR, BR * 6, 0.35, 200, 0.6, 0.45);   // 弾が残していく輪
+    const [bx, by, bs] = proj(bulletZ), R0 = Math.max(BR * 3.5 * bs, 9);
+    if (n === 3 && echoN++ % 2 === 0) echoRing((echoN >> 1) % 3, bulletZ, R0, R0 * 3, 0.6, echoN % 4 ? 8 : -8);          // 弾道に並んで開く小さな陣
+    stars(bx, by, n === 3 ? 3 : 1, 160, 11, 30); }
+  wake = 1; beamTail = 0;
   if (u >= 1) onImpact(t);
 }
 function onImpact(t){                             // 着弾
-  phase = 'cool'; tPhase = t; bulletZ = Z1; flash = 0.7; shake += 16; sndImpact(shotN); backdropEvent('impact', shotN); judge(t);
-  const m = Math.min(W, H), [x, y] = proj(Z1);
-  flare(Z1, m * 0.6, 1.0, 200, 9); flare(Z1, m * 0.4, 1.5, 212, 0); flare(Z1, m * 0.3, 0.5, 200, 0);
-  ring(Z1, 1, 30, 0.7, 200, 0.5); ring(Z1, 0.5, 16, 1.0, 262, 0.7, 0.7);
-  echoRing(2, Z1, m * 0.05, m * 0.46, 1.3, 3); echoRing(0, Z1, m * 0.03, m * 0.30, 1.4, -4.5, 0.1); echoRing(1, Z1, m * 0.02, m * 0.17, 1.5, 6, 0.2);
-  lightRays(Z1, m * 0.8, 22, 1.3, 200, 0.35); lightRays(Z1, m * 0.5, 14, 1.0, 320, -0.5);
-  stars(x, y, 46, 520, 17, 60);
-  for (let k2 = 0; k2 < 50; k2++){ const a = Math.random() * TAU, v = 80 + Math.random() * 420;
-    part(x, y, Math.cos(a) * v, Math.sin(a) * v, 0.5 + Math.random() * 0.8, k2 % 3 ? 200 : 262, 6 + Math.random() * 9, 3); }
+  const n = shotN, k = n - 1, m = Math.min(W, H);
+  phase = 'cool'; tPhase = t; bulletZ = Z1; sndImpact(n); backdropEvent('impact', n);
+  const got = judge(t);
+  if (!got.length){                               // はずれ：遠くで、小さく消える
+    const [x, y] = proj(Z1); ring(Z1, 0.5, 5 + 2 * n, 0.5, 200, 0.5, 0.5); flare(Z1, m * 0.06, 0.4, 200, 0, 0.7); stars(x, y, 3 + 2 * n, 140, 10, 20);
+    return;
+  }
+  for (const q of got) withDir(q.d, () => {       // 命中：的の場所で咲く
+    flare(Z1, m * [0.2, 0.3, 0.42][k], [0.3, 0.35, 0.4][k], 200, [0, 5, 9][k]);          // 白い光は短く
+    ring(Z1, 1, [12, 20, 30][k], 0.7, 200, 0.5);
+    if (n >= 2){ ring(Z1, 0.5, 14, 1.0, q.hue, 0.7, 0.7); lightRays(Z1, m * [0, 0.5, 0.8][k], [0, 14, 22][k], 1.1, 200, 0.35); }
+    if (n === 3){ echoRing(2, Z1, m * 0.05, m * 0.46, 1.3, 3); echoRing(0, Z1, m * 0.03, m * 0.30, 1.4, -4.5, 0.1); echoRing(1, Z1, m * 0.02, m * 0.17, 1.5, 6, 0.2);
+      lightRays(Z1, m * 0.5, 14, 1.0, 320, -0.5); flare(Z1, m * 0.3, 0.9, 212, 0, 0.5); }
+  });
 }
-function stepCool(t){
-  wake = Math.max(0, 1 - (t - tPhase) / 0.8);
-  if (t - tPhase > 1.0){ circles = []; charge = 0; ignited = 0; phase = 'load'; backdropEvent('reset', 0); }
+function stepCool(t, dt){                         // 余韻：ビームは手前から消えていき、消えた所に光の粒が残って漂う
+  const n = shotN, el = t - tPhase, T = COOL_SEC[n - 1];
+  wake = Math.max(0, 1 - el / (T * 0.85));
+  beamTail = Math.pow(Math.min(1, el / (T * 0.7)), 1.5);
+  if (n >= 2 && dt > 0 && wake > 0.05) for (let j = 0; j < n - 1; j++){
+    const [x, y, s] = proj(zAt(BEAM_Z0, Z1, Math.min(0.97, beamTail * Math.random()))), r = Math.min(30, BR * 3 * s) + 3;
+    part(x + (Math.random() - 0.5) * r, y + (Math.random() - 0.5) * r, (Math.random() - 0.5) * 40, (Math.random() - 0.5) * 40 - 12, 0.5 + Math.random() * 0.6, j ? 262 : 200, 3 + Math.random() * 5, 1.2); }
+  if (el > T){ circles = []; charge = 0; ignited = 0; phase = 'load'; anchorDir = null; shotTargets = []; backdropEvent('reset', 0); }
 }
 
 // ---- 毎フレーム ----
-let lastReal = performance.now() / 1000;
+let lastReal = performance.now() / 1000, lastCamZoom = '';
 function frame(){
   // 時計を進める。rdt は実際に過ぎた秒数、dt は演出の秒数（hold の間は 0）
   const real = performance.now() / 1000; let rdt = Math.min(0.05, real - lastReal); lastReal = real;
@@ -97,16 +125,20 @@ function frame(){
 
   const decay = Math.exp(-dt * 3.2); ox *= decay; oy *= decay;
   shake *= Math.exp(-dt * 7); flash *= Math.exp(-dt * 6); punch *= Math.exp(-dt * 9);
+  recV += (-620 * recoil - 30 * recV) * dt; recoil += recV * dt;       // 反動は、ばねで戻る
   g.setTransform(DPR, 0, 0, DPR, 0, 0); g.clearRect(0, 0, W, H);
-  { const k = 1 + punch * 0.07; g.translate(W/2, H/2); g.scale(k, k); g.translate(-W/2, -H/2);        // 命中の瞬間、映像ごと一瞬ふくらむ
-    if (camEl.isConnected) camEl.style.transform = punch > 0.01 ? `scale(${1 + punch * 0.05})` : ''; }
+  // 命中の瞬間は映像ごと一瞬ふくらみ、発射の瞬間は逆に一瞬引く
+  { const k = (1 + punch * 0.07) * (1 - recoil * 0.04); g.translate(W/2, H/2); g.scale(k, k); g.translate(-W/2, -H/2);
+    const cz = (CAM_ZOOM * (1 + punch * 0.05) * (1 - recoil * 0.03)).toFixed(4);
+    if (cz !== lastCamZoom && camEl.isConnected){ camEl.style.transform = `scale(${cz})`; lastCamZoom = cz; } }
   g.translate((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake);
   g.globalCompositeOperation = 'lighter';
 
   if (phase === 'load') stepLoad(t, dt);
   if (phase === 'ready') stepReady(t);
   if (phase === 'fire') stepFire(t);
-  if (phase === 'cool') stepCool(t);
+  if (phase === 'cool') stepCool(t, dt);
+  if (phase !== 'ready') squeeze += (0 - squeeze) * (1 - Math.exp(-dt * 14));      // 絞りは、発射で一気に戻る
 
   const spinUp = phase === 'ready' ? Math.pow(Math.min(1, (t - tPhase) / READY_SEC), 2) : 0;
   spinCircles(t, dt, spinUp);
@@ -115,10 +147,11 @@ function frame(){
 
   drawCharging(t, dt);
   drawCircles(t, spinUp);
+  if (phase === 'ready') drawCore(t);
   updateTargets(t); drawTargets(t); drawReticle(t); listenVoice(t);
-  if (wake > 0) drawBeam(phase === 'fire' ? bulletZ : Z1, wake, t);
-  drawMagic(t, dt); drawFx(t, dt);
-  if (phase === 'fire') drawBullet(bulletZ);
+  if (wake > 0) drawBeam(phase === 'fire' ? bulletZ : Z1, wake, t, shotN, beamTail);
+  drawGather(t); drawMagic(t, dt); drawFx(t, dt);
+  if (phase === 'fire') drawBullet(bulletZ, shotN);
   if (flash > 0.01){ g.fillStyle = `rgba(200,235,255,${flash * 0.22})`; g.fillRect(-40, -40, W + 80, H + 80); }
 
   if (phase !== 'idle'){
