@@ -255,6 +255,7 @@ function drawCircles(t, spinUp){
       L.spark = 0; L.under = 0; L.pop = 0;
     }
     scale *= 1 - 0.1 * squeeze;                         // 発射直前の絞り（main.js が squeeze を決める）
+    if (spell && phase === 'fire' && !c.burst){ alpha *= 0.5; L.gain *= 0.7; L.halo *= 0.5; }     // 生き物が飛んでいる間、まだ通っていない陣はひかえめにして、生き物を見やすくする
     const [px, py, ps] = proj(DEPTH[i]);
     mcBody(i, c.ang, px, py, RADIUS[i] * ps * scale, alpha, c.hue);
   }

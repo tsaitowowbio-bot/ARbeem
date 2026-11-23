@@ -157,7 +157,7 @@ function onImpact(t){                             // 着弾
 }
 function stepCool(t, dt){                         // 余韻：ビームは手前から消えていき、消えた所に光の粒が残って漂う
   const n = shotN, el = t - tPhase, T = COOL_SEC[n - 1];
-  wake = Math.max(0, 1 - el / (T * 0.85));
+  wake = spell ? 0 : Math.max(0, 1 - el / (T * 0.85));        // 詠唱の魔法では、ビームの残りは出さない
   beamTail = Math.pow(Math.min(1, el / (T * 0.7)), 1.5);
   if (n >= 2 && dt > 0 && wake > 0.05) for (let j = 0; j < n - 1; j++){
     const [x, y, s] = proj(zAt(BEAM_Z0, Z1, Math.min(0.97, beamTail * Math.random()))), r = Math.min(30, BR * 3 * s) + 3;

@@ -131,7 +131,7 @@ const backdropFx = (() => {
       [lx, ly] = proj(DEPTH[0]); lt = lightFrom + (Math.max(C.lightReady * (0.5 + 0.5 * kShot), lightFrom) - lightFrom) * (calm ? u : u * u);
       lr = m * (0.55 + 0.27 * kShot) * (1 - 0.12 * u * u); lh = loadHue(shotN); tau = 0.03;
     } else if (phase === 'fire'){         // 弾についていく
-      const u = clamp(phaseT / FLY[Math.max(1, shotN) - 1]);
+      const u = clamp(phaseT / (spell ? flyDur : FLY[Math.max(1, shotN) - 1]));      // 詠唱の魔法は、生き物が飛ぶ時間に合わせる
       [lx, ly] = proj(bulletZ); lt = C.lightFire * (0.5 + 0.5 * kShot); lr = m * (0.95 - 0.35 * u); lh = castHue != null ? castHue : C.hueFire; tau = 0.05;
     } else if (phase === 'cool'){         // 当たった先で、広がりながら消える
       const u = clamp(phaseT / (C.coolHold + C.coolSec));
