@@ -97,7 +97,7 @@ function onImpact(t){                             // 着弾
     return;
   }
   for (const q of got) withDir(q.d, () => {       // 命中：的の場所で咲く
-    flare(Z1, m * [0.2, 0.3, 0.42][k], [0.3, 0.35, 0.4][k], 200, [0, 5, 9][k]);          // 白い光は短く
+    flare(Z1, m * [0.2, 0.28, 0.34][k], [0.3, 0.35, 0.4][k], 200, [0, 5, 9][k]);         // 白い光は短く
     ring(Z1, 1, [12, 20, 30][k], 0.7, 200, 0.5);
     if (n >= 2){ ring(Z1, 0.5, 14, 1.0, q.hue, 0.7, 0.7); lightRays(Z1, m * [0, 0.5, 0.8][k], [0, 14, 22][k], 1.1, 200, 0.35); }
     if (n === 3){ echoRing(2, Z1, m * 0.05, m * 0.46, 1.3, 3); echoRing(0, Z1, m * 0.03, m * 0.30, 1.4, -4.5, 0.1); echoRing(1, Z1, m * 0.02, m * 0.17, 1.5, 6, 0.2);
@@ -115,12 +115,15 @@ function stepCool(t, dt){                         // 余韻：ビームは手前
 }
 
 // ---- 毎フレーム ----
-let lastReal = performance.now() / 1000, lastCamZoom = '';
+let lastReal = performance.now() / 1000, lastCamZoom = '', slowFrames = 0;
 function frame(){
   // 時計を進める。rdt は実際に過ぎた秒数、dt は演出の秒数（hold の間は 0）
   const real = performance.now() / 1000; let rdt = Math.min(0.05, real - lastReal), wall = Math.min(0.25, real - lastReal); lastReal = real;
   if (self.__step != null){ rdt = wall = self.__step; self.__step = 0; }       // 自動テスト用：時計を手で進める
   let dt = rdt; if (holdLeft > 0){ holdLeft -= rdt; dt = 0; }
+  // コマ落ちが続いたら、描く細かさを 1 段下げる（重い端末でも、なめらかさを優先する）
+  if (self.__step == null && phase !== 'idle'){ slowFrames = wall > 0.024 ? slowFrames + 1 : Math.max(0, slowFrames - 2);
+    if (slowFrames > 45 && dprCap > 1){ dprCap = Math.max(1, dprCap - 0.5); slowFrames = 0; resize(); } }
   clock += dt; const t = clock;
 
   const decay = Math.exp(-dt * 3.2); ox *= decay; oy *= decay;
@@ -184,6 +187,6 @@ document.getElementById('go').addEventListener('click', async () => {
   voiceBtn.addEventListener('click', toggleVoice);
   volBtn.addEventListener('click', () => { volI = (volI + 1) % 4; localStorage.setItem('arbeem-vol', volI); setVol(); });
   addEventListener('keydown', e => { if (e.code === 'Space') trigger(); if (e.code === 'KeyL') load(); });
-  addEventListener('pointermove', e => { if (hasOri) return;
+  addEventListener('pointermove', e => { if (hasOri || (e.target.closest && e.target.closest('button'))) return;      // ボタンの上では、向きを変えない
     lookAz = (e.clientX / W - 0.5) * 2.2; lookEl = -(e.clientY / H - 0.5) * 1.2; lookBasis(); });
 });

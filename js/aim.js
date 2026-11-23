@@ -67,7 +67,7 @@ function drawTargets(t){
       glow(p.sx, p.sy, R * (2 + 5 * u), a, hue); glow(p.sx, p.sy, R * 1.2, a, hue, 7 * (1 + u), 0.5);
       g.strokeStyle = `hsla(${hue},100%,85%,${a})`; g.lineWidth = 7 * (1 - u) + 1;
       g.beginPath(); g.arc(p.sx, p.sy, R * (1 + 4 * (1 - Math.pow(1 - u, 3))), 0, TAU); g.stroke();
-      g.strokeStyle = `rgba(255,255,255,${a * 0.8})`; g.lineWidth = 12 * (1 - u) + 1;
+      g.strokeStyle = `rgba(255,255,255,${a * 0.6})`; g.lineWidth = 7 * (1 - u) + 1;
       g.beginPath(); g.arc(p.sx, p.sy, R * (1 + 8 * (1 - Math.pow(1 - u, 4))), 0, TAU); g.stroke();
       glow(p.sx, p.sy, R * 0.9, a, hue, 0.4, 9 * (1 + u));
       continue;

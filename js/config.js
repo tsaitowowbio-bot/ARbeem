@@ -29,8 +29,9 @@ const TAU = Math.PI * 2;
 const cv = document.getElementById('fx'), g = cv.getContext('2d');
 const hud = document.getElementById('hud'), fireBtn = document.getElementById('fire'), voiceBtn = document.getElementById('voice'), scoreEl = document.getElementById('score'), volBtn = document.getElementById('vol'), camEl = document.getElementById('cam');
 let W = 0, H = 0, F = 0, DPR = 1, FC = 400;
+let dprCap = 2;            // 描く細かさの上限。コマ落ちが続くと、main.js が 0.5 ずつ下げる
 function resize(){
-  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  DPR = Math.min(window.devicePixelRatio || 1, dprCap);
   W = innerWidth; H = innerHeight; F = Math.min(W, H) * 0.92; FC = Math.min(W, H) * 1.07 * CAM_ZOOM;   // FC：カメラ映像の画角に合わせた倍率
   cv.width = W * DPR; cv.height = H * DPR;
 }

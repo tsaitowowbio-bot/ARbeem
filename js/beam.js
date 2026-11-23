@@ -52,10 +52,10 @@ function drawBeam(zn, a, t, n, tail){
   glow(x1, y1, 26 * a * wn, 0.8 * a, 200);          // 先端（狙った先）に届いている光
 }
 function drawBullet(zn, n){
-  const wn = BEAM_W[n - 1], len = [1.4, 1.8, 2.2][n - 1], zt = Math.max(Z0, zn - len), zs = zt + (zn - zt) * 0.55;
+  const wn = BEAM_W[n - 1], len = [1.4, 1.8, 2.2][n - 1], zt = Math.max(BEAM_Z0, zn - len), zs = zt + (zn - zt) * 0.55;    // 弾は、手前の陣から出てくる
   const [nx, ny] = proj(zn), [sx, sy, ss] = proj(zs), [tx, ty, ts] = proj(zt);
   const dx = nx - tx, dy = ny - ty, L = Math.hypot(dx, dy) || 1, px = -dy / L, py = dx / L;
-  const wt = Math.max(BR * wn * ts, 3), ws = Math.max(BR * wn * ss, 3);
+  const wMax = 15 * wn, wt = Math.min(wMax, Math.max(BR * wn * ts, 3)), ws = Math.min(wMax, Math.max(BR * wn * ss, 3));     // 手前で太くなりすぎないように上限をつける
   const body = new Path2D();
   body.moveTo(tx + px*wt, ty + py*wt); body.lineTo(sx + px*ws, sy + py*ws);
   body.quadraticCurveTo(sx + (nx-sx)*0.6 + px*ws*0.85, sy + (ny-sy)*0.6 + py*ws*0.85, nx, ny);
