@@ -132,11 +132,11 @@ const backdropFx = (() => {
       lr = m * (0.55 + 0.27 * kShot) * (1 - 0.12 * u * u); lh = loadHue(shotN); tau = 0.03;
     } else if (phase === 'fire'){         // 弾についていく
       const u = clamp(phaseT / FLY[Math.max(1, shotN) - 1]);
-      [lx, ly] = proj(bulletZ); lt = C.lightFire * (0.5 + 0.5 * kShot); lr = m * (0.95 - 0.35 * u); lh = C.hueFire; tau = 0.05;
+      [lx, ly] = proj(bulletZ); lt = C.lightFire * (0.5 + 0.5 * kShot); lr = m * (0.95 - 0.35 * u); lh = castHue != null ? castHue : C.hueFire; tau = 0.05;
     } else if (phase === 'cool'){         // 当たった先で、広がりながら消える
       const u = clamp(phaseT / (C.coolHold + C.coolSec));
       [lx, ly] = proj(Z1); lt = C.lightImpact * (0.5 + 0.5 * kShot) * (wasHit ? 1 : 0.7) * (1 - u) * (1 - u);
-      lr = m * (0.6 + 0.55 * (1 - Math.pow(1 - u, 3))); lh = C.hueFire; tau = 0.04;
+      lr = m * (0.6 + 0.55 * (1 - Math.pow(1 - u, 3))); lh = castHue != null ? castHue : C.hueFire; tau = 0.04;
     }
     if (light < 0.01){ hue = lh; rad = lr; }                // 消えているあいだに、色と大きさを次の出番に合わせておく
     else { hue += (lh - hue) * follow(0.18); rad += (lr - rad) * follow(0.07); }

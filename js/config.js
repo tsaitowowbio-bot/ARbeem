@@ -26,6 +26,15 @@ const Z0 = 0.6, Z1 = 40, Y0 = -0.5;     // 弾道（手元の下 → 画面中�
 const Z_BEND = 4.2;         // これより奥は、狙った先（空間に固定した向き）へ向かって曲がる
 const TAU = Math.PI * 2;
 
+// ---- 詠唱で出す魔法：属性・姿・動き（言葉の判定は chant.js、生き物の描画は creature.js）----
+const ELEMENT_HUE = { fire: 16, ice: 192, thunder: 54, wind: 146, water: 216, earth: 34, light: 48, dark: 276 };    // 属性の色（色相）
+const ELEMENT_JA = { fire: '炎', ice: '氷', thunder: '雷', wind: '風', water: '水', earth: '土', light: '光', dark: '闇' };
+const FORM_JA = { dragon: '竜', serpent: '蛇', bird: '鳥', wolf: '狼', fish: '魚', swarm: '群れ', blade: '刃', orb: '玉' };
+const MOTION_JA = { homing: '追尾', serpentine: '蛇行', spiral: 'らせん', orbit: '旋回', zigzag: 'ジグザグ', charge: '突進' };
+const DEFAULT_MOTION = { dragon: 'serpentine', serpent: 'serpentine', bird: 'orbit', wolf: 'charge', fish: 'serpentine', swarm: 'spiral', blade: 'charge', orb: 'homing' };   // 動きのことばがないときの動き
+const RARITY_JA = ['N', 'R', 'SR', 'SSR'];
+const RARITY_P = [0.28, 0.10, 0.02];    // R・SR・SSR の基本の確率（残りが N）
+
 const cv = document.getElementById('fx'), g = cv.getContext('2d');
 const hud = document.getElementById('hud'), fireBtn = document.getElementById('fire'), voiceBtn = document.getElementById('voice'), scoreEl = document.getElementById('score'), volBtn = document.getElementById('vol'), camEl = document.getElementById('cam');
 let W = 0, H = 0, F = 0, DPR = 1, FC = 400;

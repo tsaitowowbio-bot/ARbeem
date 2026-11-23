@@ -9,6 +9,9 @@ let steady = true, lastShake = 0;
 let anchorDir = null;   // 撃った弾が向かう先（空間に固定した向き）。撃っていない間は null
 let shotTargets = [];   // 発射の瞬間に、照準の輪に入っていた的
 let recoil = 0, recV = 0;   // 発射の反動（ばねで戻る）
+let spell = null;       // 詠唱で撃つ魔法 { spec, rarity }。ふつうのビームのときは null
+let castHue = null;     // 詠唱で撃つ魔法の色（色相）。ふつうのビームのときは null
+let chanting = false;   // 声で詠唱を聞き取っている間は true（声の大きさでの発射を止める）
 // dir を向き先にして fn を実行する（その中で作った光は、その向きに固定される）
 function withDir(dir, fn){ const keep = anchorDir; anchorDir = dir; try { fn(); } finally { anchorDir = keep; } }
 

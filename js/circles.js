@@ -70,14 +70,13 @@ const SHAPES = MC_GEO.map(geo => {
 const PART_SPIN = [1, -1.7, 3.1];   // 外・星・芯の回転の比（星は逆回り）
 
 // ---- 光の絵（先に作っておき、貼って使う）：輪に沿ったにじみと、小さな光の点。どちらも、まん中を白くしない ----
-const MC_HALO = [], MC_DOT = [];
-HUE.forEach((h, i) => {
-  const mk = (size, stops) => { const c = document.createElement('canvas'); c.width = c.height = size;
-    const x = c.getContext('2d'), gr = x.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
-    stops.forEach(([o, col]) => gr.addColorStop(o, col)); x.fillStyle = gr; x.fillRect(0, 0, size, size); return c; };
-  MC_HALO[i] = mk(192, [[0, `hsla(${h},90%,65%,0.1)`], [0.5, `hsla(${h},95%,63%,0.3)`], [0.68, `hsla(${h},95%,62%,1)`], [0.77, `hsla(${h},95%,62%,0.8)`], [1, `hsla(${h},95%,60%,0)`]]);
-  MC_DOT[i] = mk(48, [[0, `hsla(${h},100%,90%,1)`], [0.3, `hsla(${h},100%,74%,0.55)`], [1, `hsla(${h},100%,65%,0)`]]);
-});
+const MC_HALO = {}, MC_DOT = {};      // 色相ごとに作って、とっておく
+function mcMk(size, stops){ const c = document.createElement('canvas'); c.width = c.height = size;
+  const x = c.getContext('2d'), gr = x.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+  stops.forEach(([o, col]) => gr.addColorStop(o, col)); x.fillStyle = gr; x.fillRect(0, 0, size, size); return c; }
+const mcHalo = h => MC_HALO[h] || (MC_HALO[h] = mcMk(192, [[0, `hsla(${h},90%,65%,0.1)`], [0.5, `hsla(${h},95%,63%,0.3)`], [0.68, `hsla(${h},95%,62%,1)`], [0.77, `hsla(${h},95%,62%,0.8)`], [1, `hsla(${h},95%,60%,0)`]]));
+const mcDot = h => MC_DOT[h] || (MC_DOT[h] = mcMk(48, [[0, `hsla(${h},100%,90%,1)`], [0.3, `hsla(${h},100%,74%,0.55)`], [1, `hsla(${h},100%,65%,0)`]]));
+HUE.forEach(h => { mcHalo(h); mcDot(h); });
 function mcSpot(img, x, y, r, a){ if (a <= 0.004) return; g.globalAlpha = Math.min(1, a); g.drawImage(img, x - r, y - r, r * 2, r * 2); g.globalAlpha = 1; }
 
 // ---- 線の描き方 ----
@@ -105,10 +104,11 @@ function mcSoft(u, v){                                   // 輪のにじみ（u�
 //   open：星の開き（0＝星、1＝多角形）／core：芯の大きさ／spark：芯の火花／under：下に敷く暗い線
 //   pop：装填の瞬間に、外へ広がって消える色の輪（1 → 0）
 const mcL = { lum: 72, sat: 95, gain: 1, wide: 1, halo: 0.13, open: 0, core: 1, spark: 0, under: 0, pop: 0 };
-function mcBody(i, ang, x, y, R, alpha){
-  const L = mcL, hue = HUE[i], geo = MC_GEO[i], sh = SHAPES[i], A = alpha * L.gain;
+function mcBody(i, ang, x, y, R, alpha, hue){            // hue：色相（省くと、その陣のふだんの色。詠唱の魔法では、属性の色になる）
+  if (hue == null) hue = HUE[i];
+  const L = mcL, geo = MC_GEO[i], sh = SHAPES[i], A = alpha * L.gain, halo = mcHalo(hue), dotI = mcDot(hue);
   g.save(); g.translate(x, y); g.scale(R, R * 0.9);
-  mcSpot(MC_HALO[i], 0, 0, 1.3, L.halo * A);
+  mcSpot(halo, 0, 0, 1.3, L.halo * A);
   mcPen(hue, L.sat, L.lum, A, L.wide, R, L.under * alpha);
   mcSoft(1, 1);
   g.save(); g.rotate(ang[0]); mcInk(sh[0]); g.restore();                              // 外の帯
@@ -122,8 +122,8 @@ function mcBody(i, ang, x, y, R, alpha){
   g.strokeStyle = `hsla(${hue},100%,90%,${0.55 * alpha})`; g.lineWidth = 2.4 / R;
   g.beginPath(); g.arc(0, 0, 1, sw, sw + 0.7 + ex); g.stroke();
   g.beginPath(); g.arc(0, 0, 0.74, -sw, -sw + 0.5 + ex); g.stroke();
-  for (let k = 0; k < 3; k++){ const a = ang[0] * 1.6 + k * TAU / 3; mcSpot(MC_DOT[i], Math.cos(a) * 0.97, Math.sin(a) * 0.97, 0.08, 0.9 * alpha); }
-  if (L.spark > 0.01) mcSpot(MC_DOT[i], 0, 0, 0.16 + 0.2 * (1 - L.spark), L.spark * alpha);       // 芯の火花（点火の一瞬）
+  for (let k = 0; k < 3; k++){ const a = ang[0] * 1.6 + k * TAU / 3; mcSpot(dotI, Math.cos(a) * 0.97, Math.sin(a) * 0.97, 0.08, 0.9 * alpha); }
+  if (L.spark > 0.01) mcSpot(dotI, 0, 0, 0.16 + 0.2 * (1 - L.spark), L.spark * alpha);       // 芯の火花（点火の一瞬）
   if (L.pop > 0.02){ g.strokeStyle = `hsla(${hue},100%,78%,${0.6 * L.pop * alpha})`; g.lineWidth = (1 + 5 * L.pop) / R;          // 装填の瞬間に広がる輪
     g.beginPath(); g.arc(0, 0, 1.08 + 0.3 * (1 - L.pop) * (1 - L.pop), 0, TAU); g.stroke(); }
   g.restore();
@@ -137,7 +137,7 @@ function drawCircle(i, c, scale, alpha, heat, t){
   const [x, y, s] = proj(c.z || DEPTH[i]), R = (c.R != null ? c.R : RADIUS[i] * s) * scale, h = Math.max(0, Math.min(1, heat));
   const L = mcL; L.lum = 72 + 10 * h; L.sat = 95; L.gain = 0.85 + 0.15 * Math.sin(t * 2.1 + i * 1.7) + 0.6 * h; L.wide = 1 + h; L.halo = 0.13 + 0.2 * h;
   L.open = 0; L.core = 1; L.spark = 0; L.under = 0; L.pop = 0;
-  mcBody(i, c.ang, x, y, R, alpha);
+  mcBody(i, c.ang, x, y, R, alpha, c.hue);
 }
 
 // ---- 装填：1 枚ぶんたまったら（または振ったら）、陣を 1 枚足す ----
@@ -185,12 +185,12 @@ function spinCircles(t, dt, spinUp){
 // ---- 次の 1 枚：charge（0→1）に合わせて、線で描かれていく。charge が下がれば、同じ道すじで消えていく ----
 // 順番：外の輪がぐるりと引かれる → 星の辺が 1 本ずつ伸びる → 帯にルーンが並ぶ。帯の外の目盛りは、たまり具合そのもの。
 function mcBuild(i, ch){
-  const [x, y, s] = proj(DEPTH[i]), R = RADIUS[i] * s * (1.05 - 0.05 * ch), hue = HUE[i], geo = MC_GEO[i], dot = MC_DOT[i], ang = ghost.ang;
+  const [x, y, s] = proj(DEPTH[i]), R = RADIUS[i] * s * (1.05 - 0.05 * ch), hue = HUE[i], geo = MC_GEO[i], dot = mcDot(hue), ang = ghost.ang;
   const dir = i % 2 ? -1 : 1, back = MC_WIND * (1 - ch) * dir;
   for (let k = 0; k < 3; k++) ang[k] = MC_TOP - back * PART_SPIN[k];                // 回りながら描かれ、描き終わりに真上へ着く
   const A = 0.72 + 0.2 * ch;                                                        // 描きかけは、少しだけ淡い
   g.save(); g.translate(x, y); g.scale(R, R * 0.9);
-  mcSpot(MC_HALO[i], 0, 0, 1.3, 0.11 * ch * ch * A);
+  mcSpot(mcHalo(hue), 0, 0, 1.3, 0.11 * ch * ch * A);
   mcPen(hue, 95, 72, A, 1, R, MC_UNDER);
   // 外の帯：3 本の輪 → 目盛り（たまり具合）→ ルーン
   const u0 = mcSeg(ch, 0, 0.38), u2 = mcSeg(ch, 0.10, 0.48), nr = Math.floor(mcSeg(ch, 0.5, 0.97) * geo.n + 1e-6);
@@ -256,6 +256,6 @@ function drawCircles(t, spinUp){
     }
     scale *= 1 - 0.1 * squeeze;                         // 発射直前の絞り（main.js が squeeze を決める）
     const [px, py, ps] = proj(DEPTH[i]);
-    mcBody(i, c.ang, px, py, RADIUS[i] * ps * scale, alpha);
+    mcBody(i, c.ang, px, py, RADIUS[i] * ps * scale, alpha, c.hue);
   }
 }

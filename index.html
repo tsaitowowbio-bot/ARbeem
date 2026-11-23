@@ -28,6 +28,16 @@
     border:1px solid rgba(190,235,255,.6);background:rgba(10,20,34,.5);color:#dff6ff;font-size:12px;letter-spacing:.1em}
   #vol{position:fixed;right:14px;top:calc(max(14px,env(safe-area-inset-top)) + 42px);padding:8px 14px;border-radius:999px;
     border:1px solid rgba(190,235,255,.6);background:rgba(10,20,34,.5);color:#dff6ff;font-size:12px;letter-spacing:.1em}
+  #chant{position:fixed;left:14px;right:14px;top:calc(max(14px,env(safe-area-inset-top)) + 88px);gap:6px}
+  body.on #chant{display:flex}
+  #chant input{flex:1;min-width:0;font-size:16px;padding:9px 12px;border-radius:999px;border:1px solid rgba(190,235,255,.6);
+    background:rgba(10,20,34,.55);color:#eafaff;outline:none}
+  #chant input::placeholder{color:rgba(223,246,255,.5)}
+  #chant button{padding:8px 14px;border-radius:999px;border:1px solid rgba(190,235,255,.6);background:rgba(10,20,34,.5);
+    color:#dff6ff;font-size:13px;letter-spacing:.1em;white-space:nowrap}
+  #chant button.live{background:rgba(150,225,255,.4)}
+  #chantOut{position:fixed;left:18px;right:18px;top:calc(max(14px,env(safe-area-inset-top)) + 134px);font-size:12px;
+    letter-spacing:.08em;opacity:.9;text-shadow:0 0 6px #000;pointer-events:none}
   #score{position:fixed;left:14px;top:max(18px,env(safe-area-inset-top));font-size:12px;letter-spacing:.1em;
     opacity:.85;text-shadow:0 0 6px #000;pointer-events:none}
 </style>
@@ -41,19 +51,29 @@
 <button id="voice" class="ui">声で発射：切</button>
 <button id="vol" class="ui">音量：中</button>
 <button id="fire" class="ui" disabled>発射</button>
+<form id="chant" class="ui" autocomplete="off">
+  <input id="chantText" type="text" enterkeyhint="send" maxlength="60" placeholder="詠唱（例：燃え盛れ 紅蓮の竜よ うねり進め）">
+  <button id="chantMic" type="button">声</button>
+  <button id="chantGo" type="submit">唱える</button>
+</form>
+<div id="chantOut" class="ui"></div>
 <div id="start">
   <button id="go">はじめる</button>
-  <p>かまえていると、魔法陣が 1 枚ずつ装填されます（最大 3 枚）。<br>まわりに浮かぶ的に照準を合わせて、<br>「発射」ボタンか、声で撃ちます。<br>枚数が多いほど、当たる範囲が広がります。<br>
+  <p>かまえていると、魔法陣が 1 枚ずつ装填されます（最大 3 枚）。<br>まわりに浮かぶ的に照準を合わせて、<br>「発射」ボタンか、声で撃ちます。<br>枚数が多いほど、当たる範囲が広がります。<br>詠唱を入れて「唱える」と、ことばに合った魔法が出ます。<br>
   <span style="opacity:.6">（パソコン：マウスで向きを変える／スペースで発射）</span></p>
 </div>
-<script src="js/config.js?v=7"></script>
-<script src="js/state.js?v=7"></script>
-<script src="js/fx.js?v=7"></script>
-<script src="js/circles.js?v=7"></script>
-<script src="js/audio.js?v=7"></script>
-<script src="js/beam.js?v=7"></script>
-<script src="js/aim.js?v=7"></script>
-<script src="js/backdrop.js?v=7"></script>
-<script src="js/main.js?v=7"></script>
+<script src="js/config.js?v=8"></script>
+<script src="js/state.js?v=8"></script>
+<script src="js/fx.js?v=8"></script>
+<script src="js/circles.js?v=8"></script>
+<script src="js/audio.js?v=8"></script>
+<script src="js/beam.js?v=8"></script>
+<script src="js/aim.js?v=8"></script>
+<script src="js/backdrop.js?v=8"></script>
+<script src="js/lexicon.js?v=8"></script>
+<script src="js/chant.js?v=8"></script>
+<script src="js/creature.js?v=8"></script>
+<script src="js/chantui.js?v=8"></script>
+<script src="js/main.js?v=8"></script>
 </body>
 </html>

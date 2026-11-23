@@ -1,18 +1,21 @@
 'use strict';
 // ---- 光のにじみ（先に絵を作っておき、貼って使う）----
 const SPR = {};
-[186, 212, 262, 200, 45, 320].forEach(h => {
+function spr(h){                 // 色相 h の光の絵（なければ作る。色相は 4 刻みにまとめる）
+  h = ((Math.round(h / 4) * 4) % 360 + 360) % 360;
+  if (SPR[h]) return SPR[h];
   const c = document.createElement('canvas'); c.width = c.height = 128;
   const x = c.getContext('2d'), gr = x.createRadialGradient(64, 64, 0, 64, 64, 64);
   gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.18, `hsla(${h},100%,82%,0.75)`);
   gr.addColorStop(0.5, `hsla(${h},100%,65%,0.22)`); gr.addColorStop(1, `hsla(${h},100%,60%,0)`);
-  x.fillStyle = gr; x.fillRect(0, 0, 128, 128); SPR[h] = c;
-});
+  x.fillStyle = gr; x.fillRect(0, 0, 128, 128); return SPR[h] = c;
+}
+[186, 212, 262, 200, 45, 320].forEach(spr);
 function glow(x, y, r, a, hue, sx, sy, rot){
   if (a <= 0.003 || r <= 0.2) return;
   g.globalAlpha = Math.min(1, a);
-  if (sx){ g.save(); g.translate(x, y); g.rotate(rot || 0); g.scale(sx, sy || 1); g.drawImage(SPR[hue], -r, -r, r*2, r*2); g.restore(); }
-  else g.drawImage(SPR[hue], x - r, y - r, r*2, r*2);
+  if (sx){ g.save(); g.translate(x, y); g.rotate(rot || 0); g.scale(sx, sy || 1); g.drawImage(spr(hue), -r, -r, r*2, r*2); g.restore(); }
+  else g.drawImage(spr(hue), x - r, y - r, r*2, r*2);
   g.globalAlpha = 1;
 }
 
@@ -109,7 +112,7 @@ function drawGather(t){
 // ---- 広がっていく魔法陣の残像と、放射する光の筋 ----
 let echoes = [], rays = [], echoN = 0;
 function echoRing(i, z, R0, R1, dur, w, delay){ echoes.push({ i, z, R0, R1, dur, w, born: now() + (delay || 0), dir: anchorDir,
-  c: { z, R: R0, ang: [Math.random() * TAU, Math.random() * TAU, Math.random() * TAU] } }); }
+  c: { z, R: R0, hue: castHue, ang: [Math.random() * TAU, Math.random() * TAU, Math.random() * TAU] } }); }
 function lightRays(z, len, n, dur, hue, spin, at){ rays.push({ z, len, n, dur, hue, spin, at, seed: Math.random() * 99, born: now(), dir: anchorDir }); }
 function drawMagic(t, dt){
   for (const e of echoes){

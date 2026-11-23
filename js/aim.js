@@ -96,9 +96,9 @@ function drawTargets(t){
     }
   }
   g.font = '700 22px system-ui,sans-serif'; g.textAlign = 'center';
-  for (const q of popups){ const u = (t - q.born) / 0.9;
+  for (const q of popups){ const u = (t - q.born) / (q.dur || 0.9);
     g.fillStyle = `hsla(${q.hue},100%,88%,${Math.max(0, 1 - u)})`; g.fillText(q.text, q.x, q.y - u * 26); }
-  popups = popups.filter(q => t - q.born < 0.9);
+  popups = popups.filter(q => t - q.born < (q.dur || 0.9));
 }
 function drawReticle(t){         // 照準：輪の大きさが、いま当たる範囲
   if (phase === 'idle') return;
@@ -123,7 +123,7 @@ async function toggleVoice(){
   } catch (e) { voiceBtn.textContent = '声：使えません'; }
 }
 function listenVoice(t){
-  if (!mic) return;
+  if (!mic || chanting) return;
   mic.getFloatTimeDomainData(micBuf); let sum = 0; for (const v of micBuf) sum += v * v;
   const rms = Math.sqrt(sum / micBuf.length), th = Math.max(VOICE_MIN, micFloor * VOICE_RATIO);
   if (rms > th) micHot++; else { micHot = 0; micFloor += (rms - micFloor) * 0.03; }
