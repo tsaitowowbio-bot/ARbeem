@@ -11,15 +11,17 @@ function doChant(text){
   const r = interpretChant(text);
   if (!r.ok){ fizzle(); chantSay('不発：属性か、姿のことばが見つかりません'); return; }
   if (!castSpell(r)) return;
-  const s = spell.spec, parts = [ELEMENT_JA[s.element] + (r.element ? '' : '（おまかせ）'), FORM_JA[s.form] + (r.form === s.form ? '' : '（おまかせ）'), MOTION_JA[s.motion] + (r.motion ? '' : '（おまかせ）')];
+  // 見つかったことばはそのまま、見つからなかった項目は「おまかせ」、まだ描けない姿は玉にしたことを伝える
+  const s = spell.spec, formTxt = !r.form ? FORM_JA[s.form] + '（おまかせ）' : r.form === s.form ? FORM_JA[s.form] : `${FORM_JA[r.form]}→玉（この姿は、まだ描けません）`;
+  const parts = [ELEMENT_JA[s.element] + (r.element ? '' : '（おまかせ）'), formTxt, MOTION_JA[s.motion] + (r.motion ? '' : '（おまかせ）')];
   chantSay(`${parts.join('・')}　${RARITY_JA[spell.rarity]}`);
 }
 function initChantUI(){
   const form = document.getElementById('chant'), input = document.getElementById('chantText'), micBtn = document.getElementById('chantMic');
   form.addEventListener('submit', e => { e.preventDefault(); doChant(input.value); input.blur(); });
   // 声：ブラウザの音声認識を使う（1 回の発話を聞き取って、そのまま唱える）
-  const SR = self.SpeechRecognition || self.webkitSpeechRecognition;
   micBtn.addEventListener('click', () => {
+    const SR = self.SpeechRecognition || self.webkitSpeechRecognition;
     if (!SR){ chantSay('このブラウザでは、声の聞き取りが使えません。文字で入れてください'); return; }
     if (chanting){ chantRec && chantRec.stop(); return; }
     let final = '';
