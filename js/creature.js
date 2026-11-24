@@ -36,22 +36,23 @@ const CR_GOLD = 45;                         // SR・SSR の差し色（金）の
 const CR_END_SEC = 0.45;                    // 着いたあと、消えきるまでの秒数
 const CR_PMAX = 160;                        // 粒の数の上限
 const CR_NMAX = 56;                         // 体の節の数の上限
-const CR_MESH_PATH = 0.62;                  // ポリゴンの姿の、横への動きの幅（体が大きいので、画面からはみ出さないように、ひかえめにする）
+const CR_MESH_PATH = 0.85;                  // ポリゴンの姿の、横への動きの幅（体が大きいので、画面からはみ出さないように、ひかえめにする）
 
 // ---- 姿ごとの値（長さは、幅 390px の画面で、出てきたときの px）----
 // nodes：節の数、gap：節の間隔、wide：体の太さ（半分）、head：頭の長さ、swim：体のくねりの大きさ、swimK：くねりの細かさ
-// ポリゴンの姿だけの値（この姿では、節は、気配の粒が出る「通ったあと」としてだけ使う）。len：体の長さ、
-//   elev：見おろす角度（rad。0＝真うしろ・真横から、大きいほど上から）、yaw：いつも横を向けておく角度（rad。0＝まうしろから見る、大きいほど横顔が見える）、
+// ポリゴンの姿だけの値（この姿では、節は、体のうしろに流れる「光の尾」になる）。len：体の長さ、
+//   elev：見おろす角度（rad。0＝真うしろから、大きいほど上から）、yaw：斜めに向けておく角度（rad。0＝まうしろから見る、大きいほど横顔が見える）、
 //   turn：横へ動くときに、そちらへ向きを変える強さ、bank：曲がるときの傾きやすさ、
 //   flex・tail：尾のしなり。体の位置（頭 +0.5 〜 尾 −0.5）が flex よりうしろの所が、tail の強さで、遅れてついてくる、
-//   rate：動きを 1 秒にくり返す回数、eye：目の大きさ（体の長さの何倍）、bob：足の運びに合わせて体がはずむ高さ（体の長さの何倍）
+//   rate：動きを 1 秒にくり返す回数、eye：目の大きさ（体の長さの何倍）、bob：足の運びに合わせて体がはずむ高さ（体の長さの何倍）、
+//   melt：ここよりうしろ（頭 +0.5 〜 尾 −0.5）の面が、破片になってほどける、drift：破片が流れる距離（体の長さの何倍）
 const CR_FORM = {
-  dragon:  { nodes: 12, gap: 9, wide: 16, head: 46, swim: 0,  swimK: 0.45, len: 215, elev: 0.5,  yaw: 0.6,  turn: 0.5, bank: 1.2, flex: 0.1,  tail: 1.5, rate: 2.3, eye: 0.018 },     // 竜：はばたいて飛ぶ。長い尾が、遅れてついてくる
+  dragon:  { nodes: 30, gap: 8, wide: 16, head: 46, swim: 6,  swimK: 0.45, len: 235, elev: 0.72, yaw: 0.25, turn: 0.45, bank: 0.8, flex: 0.1,  tail: 1.5, rate: 2.3, eye: 0.018, melt: -0.1,  drift: 0.5 },      // 竜：はばたいて飛ぶ。長い尾は、光の尾にほどける
   serpent: { nodes: 46, gap: 5.4, wide: 9,  head: 34, swim: 11, swimK: 0.42 },
   orb:     { nodes: 12, gap: 7,   wide: 19, head: 29, swim: 4,  swimK: 0.6 },
-  bird:    { nodes: 10, gap: 9, wide: 16, head: 40, swim: 0,  swimK: 0.5,  len: 105, elev: 0.7,  yaw: 0,    turn: 0.5, bank: 1.3, flex: -0.2, tail: 0.5, rate: 2.7, eye: 0.03 },      // 鳥：はばたいて飛ぶ
-  wolf:    { nodes: 10, gap: 9, wide: 18, head: 44, swim: 0,  swimK: 0.5,  len: 185, elev: 0.3,  yaw: 0.85, turn: 0.6, bank: 0.3, flex: -0.2, tail: 1,   rate: 2.8, eye: 0.02, bob: 0.03 },      // 狼：4 本の足で駆ける
-  fish:    { nodes: 10, gap: 9, wide: 16, head: 40, swim: 0,  swimK: 0.5,  len: 140, elev: 0.2,  yaw: 1.0,  turn: 0.5, bank: 0.3, flex: 0,    tail: 0.8, rate: 2.6, eye: 0.03 },      // 魚：尾を振って泳ぐ
+  bird:    { nodes: 26, gap: 8, wide: 12, head: 40, swim: 4,  swimK: 0.5,  len: 118, elev: 0.82, yaw: 0.15, turn: 0.6, bank: 1.0, flex: -0.2, tail: 0.5, rate: 2.7, eye: 0.03,  melt: -0.12, drift: 0.9 },      // 鳥：はばたいて飛ぶ
+  wolf:    { nodes: 28, gap: 8, wide: 16, head: 44, swim: 5,  swimK: 0.5,  len: 195, elev: 0.6,  yaw: 0.42, turn: 0.7, bank: 0.3, flex: -0.2, tail: 1,   rate: 2.8, eye: 0.02,  melt: -0.02, drift: 0.6, bob: 0.03 },    // 狼：4 本の足で駆ける
+  fish:    { nodes: 26, gap: 8, wide: 13, head: 40, swim: 6,  swimK: 0.5,  len: 145, elev: 0.5,  yaw: 0.55, turn: 0.9, bank: 0.3, flex: 0,    tail: 0.8, rate: 2.6, eye: 0.03,  melt: -0.08, drift: 0.7 },      // 魚：尾を振って泳ぐ
 };
 const CREATURE_FORMS = Object.keys(CR_FORM);
 
@@ -146,7 +147,7 @@ function crAt(c, tau, o){
 function crWide(form, s){
   if (form === 'serpent') return s < 0.12 ? 0.78 + 0.22 * (s / 0.12) : 0.05 + 0.95 * Math.pow(1 - (s - 0.12) / 0.88, 0.7);
   if (form === 'orb') return Math.pow(1 - s, 1.25);
-  return 1 - 0.75 * s;                                                  // ポリゴンの姿：通ったあとの幅（粒の出どころに使う）
+  return Math.pow(1 - s, 0.85) * (s < 0.12 ? 0.45 + 4.6 * s : 1);       // ポリゴンの姿：体のうしろに流れる、光の尾の太さ
 }
 // 節を並べる：頭から順に、頭が通ったあとを一定の間隔でさかのぼる
 function crBuild(c, t, tau){
@@ -301,7 +302,7 @@ function spawnCreature(spec, n, rarity, t){
   const hue = (ELEMENT_HUE[el] != null ? ELEMENT_HUE[el] : 48) + (R() * 2 - 1) * 5, U = F / 358.8 * CR_SCALE;
   const a = proj(BEAM_Z0), b = proj(Z1), hc = E.hot, gold = rarity >= 2;
   const mesh = f.len ? crMesh(form) : null;
-  crt = { spec, n, rare: rarity, t0: t, last: t, dt: 0, dur, mesh, yaw: null, lag: 0, pk: mesh ? CR_MESH_PATH : 1, z: BEAM_Z0, arrived: false, end: 0, hit: false, dir: anchorDir,
+  crt = { spec, n, rare: rarity, t0: t, last: t, dt: 0, dur, mesh, yaw: null, lag: 0, gn: 0, gi: 0, gt: -1, pk: mesh ? CR_MESH_PATH : 1, z: BEAM_Z0, arrived: false, end: 0, hit: false, dir: anchorDir,
     form, f, el, E, motion, v, hue, U, sz: CR_SIZE_RARE[rarity] * CR_SIZE_N[n - 1], slim: n === 1 ? 0.8 : 1, aura: CR_AURA_RARE[rarity] * CR_AURA_N[n - 1],
     N: mesh ? f.nodes : Math.min(CR_NMAX, Math.round(f.nodes * (n === 1 ? 0.85 : 1)) + rarity * 2), L0: Math.max(60, Math.hypot(b[0] - a[0], b[1] - a[1])),
     ex: 0, ey: -1, tx: 0, ty: 0, vEnd: 200, em: 0,
@@ -377,6 +378,9 @@ function crDrawBody(c, t, a, el){
   if (c.mesh){                                                // ポリゴンの姿
     if (c.el === 'light'){ g.save(); g.translate(crX[i0], crY[i0]); g.rotate(ang); g.scale(HS, HS); crHalo(c, t, ha); g.restore(); }
     if (c.el !== 'dark' && !(c.hit && c.end)) crDot(S.soft, crX[0], crY[0], f.len * m * q0 * 0.3, 0.2 * E.core * a * crSm(crT[0] / 0.16));      // 中のあかり
+    if (n > 2){ crRibbon(c, t, i0, i1); crPaint(c, a * 0.85, 1, 1.1, 0.3, lw * 0.8);
+      if (c.el !== 'dark') for (let i = i0 + 1; i < i1; i += 2) crDot(S.soft, crX[i], crY[i], crW[i] * 2.6 + 1, 0.16 * E.core * a);                          // 光の尾：通ってきた道すじに沿って、うしろへ流れる
+      if (E.spike) crSpikes(c, t, a * 0.7, i0, i1, lw); if (c.rare >= 2) crStreamers(c, t, a, i0, i1); }
     crDrawMesh(c, t, a, lw);
     return;
   }
