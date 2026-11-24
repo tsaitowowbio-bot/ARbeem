@@ -41,18 +41,18 @@ const CR_MESH_PATH = 0.85;                  // ポリゴンの姿の、横への
 // ---- 姿ごとの値（長さは、幅 390px の画面で、出てきたときの px）----
 // nodes：節の数、gap：節の間隔、wide：体の太さ（半分）、head：頭の長さ、swim：体のくねりの大きさ、swimK：くねりの細かさ
 // ポリゴンの姿だけの値（この姿では、節は、体のうしろに流れる「光の尾」になる）。len：体の長さ、
-//   elev：見おろす角度（rad。0＝真うしろから、大きいほど上から）、yaw：斜めに向けておく角度（rad。0＝まうしろから見る、大きいほど横顔が見える）、
-//   turn：横へ動くときに、そちらへ向きを変える強さ、bank：曲がるときの傾きやすさ、
+//   elev：見おろす角度（rad。0＝真横・真うしろから、大きいほど上から）。頭の向きは、そのとき進む向きに合わせる（mesh.js）、
+//   bank：曲がるときの傾きやすさ、
 //   flex・tail：尾のしなり。体の位置（頭 +0.5 〜 尾 −0.5）が flex よりうしろの所が、tail の強さで、遅れてついてくる、
 //   rate：動きを 1 秒にくり返す回数、eye：目の大きさ（体の長さの何倍）、bob：足の運びに合わせて体がはずむ高さ（体の長さの何倍）、
 //   melt：ここよりうしろ（頭 +0.5 〜 尾 −0.5）の面が、破片になってほどける、drift：破片が流れる距離（体の長さの何倍）
 const CR_FORM = {
-  dragon:  { nodes: 30, gap: 8, wide: 16, head: 46, swim: 6,  swimK: 0.45, len: 235, elev: 0.72, yaw: 0.25, turn: 0.45, bank: 0.8, flex: 0.1,  tail: 1.5, rate: 2.3, eye: 0.018, melt: -0.1,  drift: 0.5 },      // 竜：はばたいて飛ぶ。長い尾は、光の尾にほどける
+  dragon:  { nodes: 30, gap: 8, wide: 16, head: 46, swim: 6,  swimK: 0.45, len: 235, elev: 0.72, bank: 0.8, flex: 0.1,  tail: 1.5, rate: 2.3, eye: 0.018, melt: -0.1,  drift: 0.5 },      // 竜：はばたいて飛ぶ。長い尾は、光の尾にほどける
   serpent: { nodes: 46, gap: 5.4, wide: 9,  head: 34, swim: 11, swimK: 0.42 },
   orb:     { nodes: 12, gap: 7,   wide: 19, head: 29, swim: 4,  swimK: 0.6 },
-  bird:    { nodes: 26, gap: 8, wide: 12, head: 40, swim: 4,  swimK: 0.5,  len: 118, elev: 0.82, yaw: 0.15, turn: 0.6, bank: 1.0, flex: -0.2, tail: 0.5, rate: 2.7, eye: 0.03,  melt: -0.12, drift: 0.9 },      // 鳥：はばたいて飛ぶ
-  wolf:    { nodes: 28, gap: 8, wide: 16, head: 44, swim: 5,  swimK: 0.5,  len: 195, elev: 0.6,  yaw: 0.42, turn: 0.7, bank: 0.3, flex: -0.2, tail: 1,   rate: 2.8, eye: 0.02,  melt: -0.02, drift: 0.6, bob: 0.03 },    // 狼：4 本の足で駆ける
-  fish:    { nodes: 26, gap: 8, wide: 13, head: 40, swim: 6,  swimK: 0.5,  len: 145, elev: 0.5,  yaw: 0.55, turn: 0.9, bank: 0.3, flex: 0,    tail: 0.8, rate: 2.6, eye: 0.03,  melt: -0.08, drift: 0.7 },      // 魚：尾を振って泳ぐ
+  bird:    { nodes: 26, gap: 8, wide: 12, head: 40, swim: 4,  swimK: 0.5,  len: 118, elev: 0.82, bank: 1.0, flex: -0.2, tail: 0.5, rate: 2.7, eye: 0.03,  melt: -0.12, drift: 0.9 },      // 鳥：はばたいて飛ぶ
+  wolf:    { nodes: 28, gap: 8, wide: 16, head: 44, swim: 5,  swimK: 0.5,  len: 195, elev: 0.6,  bank: 0.3, flex: -0.2, tail: 1,   rate: 2.8, eye: 0.02,  melt: -0.02, drift: 0.6, bob: 0.03 },    // 狼：4 本の足で駆ける
+  fish:    { nodes: 26, gap: 8, wide: 13, head: 40, swim: 6,  swimK: 0.5,  len: 145, elev: 0.5,  bank: 0.3, flex: 0,    tail: 0.8, rate: 2.6, eye: 0.03,  melt: -0.08, drift: 0.7 },      // 魚：尾を振って泳ぐ
 };
 const CREATURE_FORMS = Object.keys(CR_FORM);
 

@@ -2,8 +2,8 @@
 // ---- ポリゴンの生き物を描く ----
 // 形は models.js のデータ（3D モデルから作った、動きつきのポリゴン）。ただし、これは「生き物の形をした魔法」なので、
 // 実物のようには描かない。前のほう（頭・肩・つばさ）だけが形を保ち、うしろは破片にほどけて、光の尾になって流れる。
-// 置き方：体のまん中を、道すじの上の「頭」の位置に置く。体は地面に対してまっすぐ立ち、撃った人から的へ遠ざかっていく。
-//         それを、うしろ斜め上から見る（後ろ姿）。横へ動けばそちらへ向きを変え、曲がるときは内側へ傾く。
+// 置き方：体のまん中を、道すじの上の「頭」の位置に置く。体は地面に対してまっすぐ立ち、それを斜め上から見る。
+//         頭は、いつも、そのとき進んでいる向きへ向く（的へ遠ざかる間は後ろ姿。横へ動けば横顔）。曲がるときは内側へ傾く。
 // 描き方：裏を向いた面を淡く（中が透けて見える）、表の面を光の当たり具合で 4 段に（加算）。頭から尾へ、光の帯が流れる。
 //         輪郭を明るい線で描き、少し前の輪郭を残像として残す。属性ごとに、形がゆらぐ（炎・水）・はねる（雷）。
 const CR_MV = 400, CR_MT = 800, CR_ME = 1300;   // 頂点・面・稜線の数の上限
@@ -43,15 +43,19 @@ function crDrawMesh(c, t, a, lw){
   const M = c.mesh, f = c.f, E = c.E, col = c.col, n = M.n, V = M.V, T = M.T, nt = M.nt, o = crO, X = crMX, Y = crMY, D = crMD;
   // 動きのコマ（となりのコマとの間を、なめらかにつなぐ）
   const ph = (((t - c.t0) * f.rate * c.v.fq + c.v.ph / TAU) % 1) * M.f, kf = Math.floor(ph), k0 = kf % M.f, k1 = (k0 + 1) % M.f, w1 = ph - kf, w0 = 1 - w1;
-  // 向き：体はいつも地面に対してまっすぐ（上＝画面の上）。遠ざかる後ろ姿を、斜め上から見る。
-  //       横へ動くぶんだけ、そちらへ向きを変える（yaw）。曲がるときは内側へ傾き（roll）、尾は遅れてついてくる。
-  const tau = (t - c.t0) / c.dur, dtau = 0.03;
-  crAt(c, tau < 1 ? tau : 1, o); const hx = o.sx; crAt(c, (tau < 1 ? tau : 1) - dtau, o);
-  const vx = (hx - o.sx) / (dtau * c.dur), want = Math.max(-1.25, Math.min(1.25, f.yaw * c.v.side + f.turn * Math.atan2(vx, c.L0 / c.dur)));
+  // 向き：体は地面に対してまっすぐ立ち（上＝画面の上）、それを斜め上から見る。
+  //       頭は、そのとき進んでいる向きへ向ける：画面の上で、体の軸が、進む向きとぴったり重なるように回す（yaw）。
+  //       画面の上へ進めば後ろ姿、横へ進めば横顔、手前へ戻ってくるときは、こちらを向く。
+  //       曲がるときは内側へ傾き（roll）、尾は遅れてついてくる。
+  const tau = (t - c.t0) / c.dur, tc = tau < 1 ? tau : 1, dtau = 0.012, ce = Math.cos(f.elev), se = Math.sin(f.elev);
+  crAt(c, tc + dtau, o); const hx = o.sx, hy = o.sy; crAt(c, tc - dtau, o);                      // いまの前後 2 点から、進む向きを読む（遅れを出さない）
+  let vx = hx - o.sx, vu = o.sy - hy;                                               // 画面の右・上への動き
+  if (c.motion === 'charge' && tau < 0.36 || Math.hypot(vx, vu) < 0.3){ vx = c.tx - hx; vu = hy - c.ty; }      // 身を引いてためている間・止まっている間は、的のほうを向く
+  const want = Math.atan2(vx, vu / se);
   if (c.yaw == null) c.yaw = c.lag = want;
-  c.yaw += (want - c.yaw) * Math.min(1, c.dt * 14); c.lag += (c.yaw - c.lag) * Math.min(1, c.dt * 5);
-  const bend = Math.max(-1, Math.min(1, c.lag - c.yaw)), roll = Math.max(-0.8, Math.min(0.8, -f.bank * bend));
-  const cr = Math.cos(roll), sr = Math.sin(roll), ce = Math.cos(f.elev), se = Math.sin(f.elev);
+  c.yaw = crWrap(c.yaw + crWrap(want - c.yaw) * Math.min(1, c.dt * 45)); c.lag = crWrap(c.lag + crWrap(c.yaw - c.lag) * Math.min(1, c.dt * 5));
+  const bend = Math.max(-1, Math.min(1, crWrap(c.lag - c.yaw))), roll = Math.max(-0.8, Math.min(0.8, -f.bank * bend));
+  const cr = Math.cos(roll), sr = Math.sin(roll);
   const q0 = crQ[0], grow = crSm(tau / 0.16), S = f.len * c.U * c.sz * c.v.len * q0 * (0.25 + 0.75 * grow) / 16000, cx = crX[0], cy = crY[0], span = S * 16000;
   const bob = f.bob ? f.bob * 16000 * Math.abs(Math.sin(ph / M.f * TAU)) : 0;                            // 足の運びに合わせて、体がはずむ
   const cut = 0.62 - 1.3 * tau / 0.2;                                               // 出てくる途中：ここより前（頭のほう）だけが、形になっている
