@@ -29,8 +29,24 @@
 | `js/backdrop.js` | カメラ映像の側の演出 |
 | `js/lexicon.js` | 詠唱のことばの表（どのことばが、どの属性・姿・動きを指すか） |
 | `js/chant.js` | 詠唱の判定（属性・姿・動きを決める。見つからなければ外れ） |
-| `js/creature.js` | 詠唱で出る生き物（部品を組み立てて描く） |
+| `js/models.js` | 生き物の形のデータ（3D モデルから作った、動きつきのポリゴン） |
+| `js/creature.js` | 詠唱で出る生き物（動き・属性の気配・蛇と玉の描画） |
+| `js/mesh.js` | ポリゴンの生き物の描画（竜・鳥・狼・魚。面と稜線で描く） |
 | `js/chantui.js` | 詠唱の入力（文字・声） |
 | `js/main.js` | 発射の合図、段取り、毎フレームの処理、開始 |
 
 どのファイルも同じ名前空間を共有している（モジュールではない）。演出の時間は `now()` で読み、`performance.now()` は直接使わない。
+
+## 生き物の形のもと
+
+竜・鳥・狼・魚の形は、著作権が放棄された（CC0）3D モデルから作っている。面の数を減らし、動きのひと回りを数コマにして `js/models.js` に入れた。
+
+| 姿 | もとのモデル | 作者 |
+|---|---|---|
+| 狼・鳥・魚 | [Animated Animales Low Poly（Animal Pack Vol.2）](https://opengameart.org/content/animated-animales-low-poly) | Quaternius |
+| 竜 | [Low Poly Ice Dragon](https://opengameart.org/content/low-poly-ice-dragon) | xTerryx |
+
+作り直すときは `tools/models/` を使う（Blender の Python モジュール `bpy` と、numpy・Pillow が要る）。
+
+1. `bake.py`：モデルを開き、面を減らし、動きの各コマの頂点を書き出す。
+2. `export.py`：向きと大きさをそろえ（前＝+x、上＝+y、体の長さ＝1）、`models.js` にする。確認用の画像も出る。
