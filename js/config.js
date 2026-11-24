@@ -31,7 +31,7 @@ const ELEMENT_HUE = { fire: 16, ice: 192, thunder: 54, wind: 146, water: 216, ea
 const ELEMENT_JA = { fire: '炎', ice: '氷', thunder: '雷', wind: '風', water: '水', earth: '土', light: '光', dark: '闇' };
 const FORM_JA = { dragon: '竜', serpent: '蛇', bird: '鳥', wolf: '狼', fish: '魚', swarm: '群れ', blade: '刃', orb: '玉' };
 const MOTION_JA = { homing: '追尾', serpentine: '蛇行', spiral: 'らせん', orbit: '旋回', zigzag: 'ジグザグ', charge: '突進' };
-const DEFAULT_MOTION = { dragon: 'serpentine', serpent: 'serpentine', bird: 'orbit', wolf: 'charge', fish: 'serpentine', swarm: 'spiral', blade: 'charge', orb: 'homing' };   // 動きのことばがないときの動き
+const DEFAULT_MOTION = { dragon: 'serpentine', serpent: 'serpentine', bird: 'orbit', wolf: 'homing', fish: 'serpentine', swarm: 'spiral', blade: 'charge', orb: 'homing' };   // 動きのことばがないときの動き
 const RARITY_JA = ['N', 'R', 'SR', 'SSR'];
 const RARITY_P = [0.28, 0.10, 0.02];    // R・SR・SSR の基本の確率（残りが N）
 

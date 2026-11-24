@@ -21,7 +21,8 @@
 const CR_FLY = { homing: 1.15, serpentine: 1.25, spiral: 1.3, orbit: 1.4, zigzag: 1.2, charge: 0.95 };   // 着くまでの秒数（動きごと。速さがふつうのとき）
 const CR_SPEED = [1.22, 1, 0.8];            // 速さが −1（ゆっくり）・0・+1（速い）のときの、秒数の倍率
 const CR_FLY_MIN = 0.8, CR_FLY_MAX = 1.7;   // 着くまでの秒数の下限・上限
-const CR_FAR = 0.36;                        // 狙った先に着くときの大きさ（出てきたときを 1 として）
+const CR_SCALE = 1.5;                       // 生き物ぜんたいの大きさ（体・つばさ・横への動きの幅に、まとめてかかる）
+const CR_FAR = 0.42;                        // 狙った先に着くときの大きさ（出てきたときを 1 として）
 const CR_SIZE_RARE = [0.88, 1, 1.1, 1.2];   // レア度ごとの大きさ（N・R・SR・SSR）
 const CR_SIZE_N = [0.74, 0.88, 1];          // 装填の枚数ごとの大きさ（1・2・3 枚）
 const CR_AURA_RARE = [0.55, 1, 1.4, 1.8];   // レア度ごとの、気配（粒）の多さ
@@ -41,6 +42,8 @@ const CR_FORM = {
   dragon:  { nodes: 34, gap: 6.4, wide: 12,  head: 48, swim: 6,   swimK: 0.45, wing: 84 },
   serpent: { nodes: 46, gap: 5.4, wide: 9,   head: 34, swim: 11,  swimK: 0.42, wing: 0 },
   orb:     { nodes: 12, gap: 7,   wide: 19,  head: 29, swim: 4,   swimK: 0.6,  wing: 0 },
+  bird:    { nodes: 16, gap: 6,   wide: 13,  head: 30, swim: 2,   swimK: 0.5,  wing: 118 },     // 鳥：短い体、大きな羽のつばさ、扇形の尾
+  wolf:    { nodes: 22, gap: 7.4, wide: 17,  head: 50, swim: 3.5, swimK: 0.5,  wing: 0 },       // 狼：耳と鼻づらのある頭、4 本の足で駆ける、ふさふさの尾
 };
 const CREATURE_FORMS = Object.keys(CR_FORM);
 
@@ -131,10 +134,16 @@ function crAt(c, tau, o){
       o.sx += c.ex * e * 30 * c.U; o.sy += c.ey * e * 30 * c.U; o.q = q * (1 - 0.8 * e); }
   }
 }
+// 折れ線の表 [位置, 値, 位置, 値, …] から、位置 s の値を読む
+function crKey(s, K){ for (let k = 2; k < K.length; k += 2) if (s <= K[k]){ const u = (s - K[k - 2]) / (K[k] - K[k - 2]); return K[k - 1] + (K[k + 1] - K[k - 1]) * crSm(u); } return K[K.length - 1]; }
+const CR_W_BIRD = [0, 0.6, 0.14, 1, 0.5, 0.5, 0.62, 0.42, 0.9, 1.05, 1, 0.75];            // 鳥：胸がふくらみ、腰で細くなり、尾は扇形に開く
+const CR_W_WOLF = [0, 0.66, 0.1, 0.72, 0.24, 1, 0.5, 0.74, 0.62, 0.86, 0.72, 0.3, 0.88, 0.6, 1, 0.04];   // 狼：首、胸、くびれた腹、腰、細い付け根から、ふさふさの尾
 // 姿ごとの、体の太さ（s：0＝頭 → 1＝尾の先）
 function crWide(form, s){
   if (form === 'dragon') return s < 0.2 ? 0.62 + 0.38 * crSm(s / 0.2) : 0.07 + 0.93 * Math.pow(1 - (s - 0.2) / 0.8, 0.9) + 0.3 * Math.max(0, 1 - Math.abs(s - 0.93) / 0.07);     // 尾の先に、小さなひし形
   if (form === 'serpent') return s < 0.12 ? 0.78 + 0.22 * (s / 0.12) : 0.05 + 0.95 * Math.pow(1 - (s - 0.12) / 0.88, 0.7);
+  if (form === 'bird') return crKey(s, CR_W_BIRD);
+  if (form === 'wolf') return crKey(s, CR_W_WOLF);
   return Math.pow(1 - s, 1.25);
 }
 // 節を並べる：頭から順に、頭が通ったあとを一定の間隔でさかのぼる
@@ -287,7 +296,7 @@ function spawnCreature(spec, n, rarity, t){
   // 種で決まる、小さな違い（同じ詠唱なら、いつも同じ）
   const v = { side: R() < 0.5 ? -1 : 1, ph: R() * TAU, fq: 0.9 + R() * 0.2, len: 0.88 + R() * 0.24, horns: R() < 0.4 ? 2 : 1, hornLen: 0.8 + R() * 0.4,
               wing: 0.9 + R() * 0.2, sw: 9 + R() * 4, every: R() < 0.5 ? 2 : 3, snout: 0.9 + R() * 0.2, flap: 13 + R() * 4 };
-  const hue = (ELEMENT_HUE[el] != null ? ELEMENT_HUE[el] : 48) + (R() * 2 - 1) * 5, U = F / 358.8;
+  const hue = (ELEMENT_HUE[el] != null ? ELEMENT_HUE[el] : 48) + (R() * 2 - 1) * 5, U = F / 358.8 * CR_SCALE;
   const a = proj(BEAM_Z0), b = proj(Z1), hc = E.hot, gold = rarity >= 2;
   crt = { spec, n, rare: rarity, t0: t, last: t, dur, z: BEAM_Z0, arrived: false, end: 0, hit: false, dir: anchorDir,
     form, f, el, E, motion, v, hue, U, sz: CR_SIZE_RARE[rarity] * CR_SIZE_N[n - 1], slim: n === 1 ? 0.8 : 1, aura: CR_AURA_RARE[rarity] * CR_AURA_N[n - 1],
@@ -363,6 +372,7 @@ function crDrawBody(c, t, a, el){
     crDot(S.dark, crX[i0], crY[i0], HS * 0.95, sa * 1.3);
     g.globalCompositeOperation = 'lighter'; }
   if (f.wing && n > 3) crWings(c, t, a, i0, i1, lw);          // つばさ（体より先に描く）
+  if (c.form === 'wolf' && n > 3) crLegs(c, t, a, i0, i1, lw);  // 足（体より先に描く）
   if (n > 1){
     crRibbon(c, t, i0, i1); crPaint(c, a, 1, 1, 1, lw);
     // 中のあかり：体の芯が、属性の色でぼんやり光る（白くはしない）。闇は光らせず、暗い芯のままにする
@@ -375,7 +385,8 @@ function crDrawBody(c, t, a, el){
   if (ha > 0.01){                                             // 頭
     g.save(); g.translate(crX[i0], crY[i0]); g.rotate(ang); g.scale(HS, HS);
     if (c.el === 'light') crHalo(c, t, ha);
-    if (c.form === 'dragon') crHeadDragon(c, t, ha, HS, lw); else if (c.form === 'serpent') crHeadSerpent(c, t, ha, HS, lw); else crHeadOrb(c, t, ha, HS);
+    if (c.form === 'dragon') crHeadDragon(c, t, ha, HS, lw); else if (c.form === 'serpent') crHeadSerpent(c, t, ha, HS, lw);
+    else if (c.form === 'bird') crHeadBird(c, t, ha, HS, lw); else if (c.form === 'wolf') crHeadWolf(c, t, ha, HS, lw); else crHeadOrb(c, t, ha, HS);
     g.restore();
   }
 }
@@ -444,6 +455,50 @@ function crHeadSerpent(c, t, a, HS, lw){
   crDot(c.spr.soft, 0.05, 0, 0.4, 0.2 * c.E.core * a);
   crDot(c.spr.hot, 0.24, 0.17, 0.1, a); crDot(c.spr.hot, 0.24, -0.17, 0.1, a);
 }
+// 鳥の頭：丸い頭と、とがったくちばし。向きは +x、長さが 1
+const CR_HEAD_BIRD = [0.5, 0, 0.44, 0.14, 0.3, 0.26, 0.08, 0.32, -0.16, 0.28, -0.36, 0.17];
+function crHeadBird(c, t, a, HS, lw){
+  const col = c.col, px = 1 / HS;
+  g.beginPath(); g.moveTo(0.95, 0); g.lineTo(0.42, 0.13); g.lineTo(0.42, -0.13); g.closePath();          // くちばし
+  g.fillStyle = col.acc; g.globalAlpha = 0.4 * a; g.fill(); g.strokeStyle = col.acc; g.globalAlpha = 0.75 * a; g.lineWidth = lw * 0.8 * px; g.stroke();
+  g.beginPath();                                                                                      // かんむり羽：頭のうしろへ流れる 3 枚
+  for (let k = -1; k <= 1; k++){ const L = 0.5 + 0.12 * Math.sin(t * 9 + k) - Math.abs(k) * 0.12; g.moveTo(-0.26, k * 0.14); g.quadraticCurveTo(-0.5, k * 0.3, -0.34 - L, k * 0.34); g.quadraticCurveTo(-0.5, k * 0.16, -0.3, k * 0.06); g.closePath(); }
+  g.fillStyle = col.acc; g.globalAlpha = 0.28 * a; g.fill(); g.globalAlpha = 0.6 * a; g.lineWidth = lw * 0.7 * px; g.stroke();
+  crSym(CR_HEAD_BIRD); crPaint(c, a, px, 1.6, 1.2, lw);
+  crDot(c.spr.soft, 0.05, 0, 0.4, 0.22 * c.E.core * a);
+  crDot(c.spr.hot, 0.26, 0.19, 0.1, a); crDot(c.spr.hot, 0.26, -0.19, 0.1, a);
+}
+// 狼の頭：細い鼻づら、毛の立ったほお、うしろへ寝かせた三角の耳
+const CR_HEAD_WOLF = [0.72, 0, 0.68, 0.07, 0.42, 0.11, 0.24, 0.2, 0.1, 0.33, -0.04, 0.3, -0.1, 0.43, -0.24, 0.29, -0.3, 0.36, -0.42, 0.16];
+function crHeadWolf(c, t, a, HS, lw){
+  const col = c.col, px = 1 / HS, tw = 0.03 * Math.sin(t * 12 + c.v.ph);
+  g.beginPath();                                                                                      // 耳
+  for (let sd = -1; sd <= 1; sd += 2){ g.moveTo(0.08, 0.18 * sd); g.lineTo(-0.44, (0.62 + tw) * sd); g.lineTo(-0.3, 0.12 * sd); g.closePath(); }
+  g.fillStyle = col.acc; g.globalAlpha = 0.34 * a; g.fill(); g.strokeStyle = col.acc; g.globalAlpha = 0.14 * a; g.lineWidth = lw * 2.2 * px; g.stroke(); g.globalAlpha = 0.75 * a; g.lineWidth = lw * 0.8 * px; g.stroke();
+  crSym(CR_HEAD_WOLF); crPaint(c, a, px, 1.6, 1.2, lw);
+  crDot(c.spr.soft, 0.02, 0, 0.42, 0.22 * c.E.core * a);
+  g.beginPath(); g.moveTo(0.6, 0); g.lineTo(-0.1, 0); g.strokeStyle = col.rim; g.globalAlpha = 0.16 * a; g.lineWidth = lw * 1.6 * px; g.stroke();     // 鼻すじ
+  crDot(c.spr.hot, 0.7, 0, 0.07, 0.9 * a);                                                            // 鼻先
+  crDot(c.spr.hot, 0.16, 0.16, 0.1, a); crDot(c.spr.hot, 0.16, -0.16, 0.1, a);                       // 目
+}
+// 狼の足：肩と腰から、左右へ 2 本ずつ。前へ伸ばす・うしろへ蹴る、をくり返して駆ける
+function crLegs(c, t, a, i0, i1, lw){
+  const m = c.U * c.sz, gait = t * (c.v.flap + 5);
+  for (let pr = 0; pr < 2; pr++){
+    const i = Math.round(c.N * (pr ? 0.6 : 0.22)); if (i < i0 + 1 || i >= i1 - 1) continue;
+    const q = crQ[i], em = crSm(crT[i] / 0.12), L = 60 * m * q * em; if (L < 1) continue;
+    const tx = crNy[i], ty = -crNx[i];                                              // 頭のほうへ向かう向き
+    for (let sd = -1; sd <= 1; sd += 2){
+      const sw = Math.sin(gait + pr * 2.6 + (sd > 0 ? 0.7 : 0)), nx = crNx[i] * sd, ny = crNy[i] * sd, w = crW[i];
+      const bx = crX[i] + nx * w * 0.7, by = crY[i] + ny * w * 0.7, kx = bx + nx * L * 0.42 + tx * L * 0.3 * sw, ky = by + ny * L * 0.42 + ty * L * 0.3 * sw;     // ひざ
+      const fx = bx + nx * L * 0.62 + tx * L * (0.95 * sw + 0.1), fy = by + ny * L * 0.62 + ty * L * (0.95 * sw + 0.1), th = 8 * m * q;                         // 足先
+      g.beginPath(); g.moveTo(bx + tx * th, by + ty * th); g.quadraticCurveTo(kx + tx * th * 0.8, ky + ty * th * 0.8, fx + tx * th * 0.55, fy + ty * th * 0.55);
+      g.lineTo(fx + nx * th * 0.7, fy + ny * th * 0.7); g.lineTo(fx - tx * th * 0.55, fy - ty * th * 0.55); g.quadraticCurveTo(kx - tx * th * 0.8, ky - ty * th * 0.8, bx - tx * th, by - ty * th); g.closePath();
+      crPaint(c, a * 0.9, 1, 1.2, 0.7, lw * 0.85);
+      crDot(c.spr.hot, fx, fy, th * 0.9, 0.55 * a);                                   // 足先のあかり
+    }
+  }
+}
 // 玉：中の透けた球と、まわりを回る小さな光
 function crHeadOrb(c, t, a, HS){
   const S = c.spr, ua = CR_UNDER * c.E.under * 1.3 * a;
@@ -454,9 +509,13 @@ function crHeadOrb(c, t, a, HS){
 }
 // つばさ：肩の節から左右へ。はばたきで、長さと向きが変わる。SR 以上は、うしろに小さな 2 組目
 function crWingPath(c, i, sd, sweep, S, span, bones){
+  const bird = c.form === 'bird';
   g.save(); g.translate(crX[i], crY[i]); g.rotate(Math.atan2(-crNx[i], crNy[i])); g.scale(1, sd); g.translate(0, crW[i] * 0.4); g.rotate(-sweep); g.scale(S * 0.8, S * span);
   g.beginPath();
-  if (bones){ g.moveTo(0.34, 0.44); g.lineTo(-0.5, 0.76); g.moveTo(0.34, 0.44); g.lineTo(-0.72, 0.42); }
+  if (bird && bones){ g.moveTo(0.2, 0.3); g.lineTo(-0.16, 0.92); g.moveTo(0.14, 0.24); g.lineTo(-0.36, 0.66); g.moveTo(0.06, 0.16); g.lineTo(-0.5, 0.36); }      // 羽のすじ
+  else if (bird){ g.moveTo(0.2, 0); g.quadraticCurveTo(0.46, 0.3, 0.26, 0.62); g.quadraticCurveTo(0.14, 0.9, -0.14, 1.06);                                  // 前のふち → とがった先
+    g.lineTo(-0.2, 0.84); g.lineTo(-0.32, 0.9); g.lineTo(-0.34, 0.66); g.lineTo(-0.48, 0.7); g.lineTo(-0.46, 0.46); g.lineTo(-0.6, 0.46); g.lineTo(-0.54, 0.22); g.lineTo(-0.62, 0.1); g.lineTo(-0.48, 0); g.closePath(); }     // うしろのふち：羽が段になって並ぶ
+  else if (bones){ g.moveTo(0.34, 0.44); g.lineTo(-0.5, 0.76); g.moveTo(0.34, 0.44); g.lineTo(-0.72, 0.42); }
   else { g.moveTo(0.14, 0); g.quadraticCurveTo(0.36, 0.18, 0.34, 0.44); g.quadraticCurveTo(0.2, 0.82, -0.1, 1.0);
     g.quadraticCurveTo(-0.2, 0.72, -0.5, 0.76); g.quadraticCurveTo(-0.44, 0.5, -0.72, 0.42); g.quadraticCurveTo(-0.5, 0.2, -0.44, 0); g.closePath(); }
   g.restore();
@@ -465,7 +524,8 @@ function crWings(c, t, a, i0, i1, lw){
   const f = c.f, m = c.U * c.sz, pairs = c.rare >= 2 ? 2 : 1;
   for (let pr = 0; pr < pairs; pr++){
     const i = Math.round(c.N * (0.2 + pr * 0.2)); if (i < i0 + 1 || i >= i1 - 1) continue;
-    const fl = Math.cos(t * c.v.flap - pr * 0.9), S = f.wing * c.v.wing * m * crQ[i] * (pr ? 0.62 : 1) * crSm(crT[i] / 0.12), span = 0.7 + 0.3 * fl, sweep = 0.34 * (0.5 - 0.5 * fl) + 0.1;
+    const bird = c.form === 'bird', fl = Math.cos(t * c.v.flap * (bird ? 0.75 : 1) - pr * 0.9), S = f.wing * c.v.wing * m * crQ[i] * (pr ? 0.62 : 1) * crSm(crT[i] / 0.12);
+    const span = bird ? 0.58 + 0.42 * fl : 0.7 + 0.3 * fl, sweep = (bird ? 0.5 : 0.34) * (0.5 - 0.5 * fl) + 0.1;      // 鳥は、大きくはばたく
     if (S < 1) continue;
     for (let sd = -1; sd <= 1; sd += 2){
       crWingPath(c, i, sd, sweep, S, span, false); crPaint(c, a * 0.9, 1, 1.1, 0.6, lw * 0.85);
